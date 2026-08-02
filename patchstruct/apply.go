@@ -253,7 +253,7 @@ func testAt(c cont, locs []loc, t *patchpb.Test, at patch.At) error {
 		if err != nil {
 			return err
 		}
-		if !reflect.DeepEqual(got.Interface(), want.Interface()) {
+		if !equalDeep(got, want) {
 			return patch.Errf(patch.CodeTestFailed, at, "at %s", describeLoc(c, l))
 		}
 	}

@@ -1,6 +1,7 @@
 package patchstruct
 
 import (
+	"math"
 	"reflect"
 
 	"github.com/lesomnus/protobuf-patch/patch"
@@ -344,4 +345,88 @@ func mapArmName(k *patchpb.MapKey) string {
 		return "a bool key"
 	}
 	return "nothing"
+}
+
+// equalDeep is reflect.DeepEqual with the schema's floating-point rule applied:
+// NaN equals NaN.
+//
+// DeepEqual compares floats with ==, so a patch could write a NaN and then be
+// unable to assert the value it had just written. patchproto follows the
+// schema, so leaving DeepEqual here would also have made the two engines
+// disagree about the same document.
+//
+// It reads through reflect's typed accessors rather than Interface() so that
+// an unexported field — which a caller's struct may well have, and which this
+// engine never writes — is compared rather than panicked on.
+func equalDeep(a, b reflect.Value) bool {
+	if !a.IsValid() || !b.IsValid() {
+		return a.IsValid() == b.IsValid()
+	}
+	if a.Type() != b.Type() {
+		return false
+	}
+
+	switch a.Kind() {
+	case reflect.Float32, reflect.Float64:
+		x, y := a.Float(), b.Float()
+		if math.IsNaN(x) || math.IsNaN(y) {
+			return math.IsNaN(x) && math.IsNaN(y)
+		}
+		return x == y
+
+	case reflect.Pointer, reflect.Interface:
+		if a.IsNil() || b.IsNil() {
+			return a.IsNil() == b.IsNil()
+		}
+		return equalDeep(a.Elem(), b.Elem())
+
+	case reflect.Struct:
+		for i := range a.NumField() {
+			if !equalDeep(a.Field(i), b.Field(i)) {
+				return false
+			}
+		}
+		return true
+
+	case reflect.Slice:
+		if a.IsNil() != b.IsNil() || a.Len() != b.Len() {
+			return false
+		}
+		fallthrough
+	case reflect.Array:
+		for i := range a.Len() {
+			if !equalDeep(a.Index(i), b.Index(i)) {
+				return false
+			}
+		}
+		return true
+
+	case reflect.Map:
+		if a.IsNil() != b.IsNil() || a.Len() != b.Len() {
+			return false
+		}
+		for _, k := range a.MapKeys() {
+			bv := b.MapIndex(k)
+			if !bv.IsValid() || !equalDeep(a.MapIndex(k), bv) {
+				return false
+			}
+		}
+		return true
+
+	case reflect.Bool:
+		return a.Bool() == b.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return a.Int() == b.Int()
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return a.Uint() == b.Uint()
+	case reflect.String:
+		return a.String() == b.String()
+	case reflect.Complex64, reflect.Complex128:
+		return a.Complex() == b.Complex()
+
+	default:
+		// Chan, Func, UnsafePointer: not addressable by this engine, and not
+		// something a Value can denote.
+		return false
+	}
 }

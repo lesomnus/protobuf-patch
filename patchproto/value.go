@@ -1,7 +1,9 @@
 package patchproto
 
 import (
-	"google.golang.org/protobuf/proto"
+	"bytes"
+	"math"
+
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/lesomnus/protobuf-patch/patch"
@@ -183,18 +185,114 @@ func equalScalarOrMessage(a, b protoreflect.Value, fd protoreflect.FieldDescript
 	if site == patch.SiteMapValue {
 		kind = fd.MapValue().Kind()
 	}
+	return equalOfKind(kind, a, b)
+}
+
+// equalOfKind is the schema's EQUALITY rule for one value of a known kind.
+func equalOfKind(kind protoreflect.Kind, a, b protoreflect.Value) bool {
 	switch kind {
 	case protoreflect.MessageKind, protoreflect.GroupKind:
 		return equalMessage(a.Message(), b.Message())
 	case protoreflect.BytesKind:
-		return string(a.Bytes()) == string(b.Bytes())
+		return bytes.Equal(a.Bytes(), b.Bytes())
+	case protoreflect.FloatKind, protoreflect.DoubleKind:
+		return equalFloat(a.Float(), b.Float())
 	default:
 		return a.Interface() == b.Interface()
 	}
 }
 
+// equalFloat implements the schema's rule that NaN equals NaN.
+//
+// A test asserts what a document holds, not an arithmetic predicate. Under
+// IEEE inequality a patch could write a NaN and then be unable to assert the
+// value it had just written, and the answer would additionally depend on
+// whether the float sat at the top level or inside a message — proto.Equal
+// already treats NaN as equal, so the two paths disagreed.
+//
+// -0.0 and +0.0 stay equal, which == gives.
+func equalFloat(x, y float64) bool {
+	if math.IsNaN(x) || math.IsNaN(y) {
+		return math.IsNaN(x) && math.IsNaN(y)
+	}
+	return x == y
+}
+
+// equalMessage implements the schema's rule that unknown fields on the target
+// take no part in equality.
+//
+// proto.Equal cannot be used: it compares the unknown-field set, and the
+// format promises to preserve unknown fields precisely because a Value has no
+// way to mention one. Together those made `test` unsatisfiable — a message
+// carrying any unknown field could never be asserted equal to anything, and
+// there was no way to write a Value that would have passed.
+//
+// Equality is otherwise EXACT. Both messages must have the same fields set,
+// which is what makes a Value absent from `fields` an assertion of absence
+// rather than a wildcard.
 func equalMessage(a, b protoreflect.Message) bool {
-	return proto.Equal(a.Interface(), b.Interface())
+	if a.Descriptor().FullName() != b.Descriptor().FullName() {
+		return false
+	}
+	if countSet(a) != countSet(b) {
+		return false
+	}
+
+	eq := true
+	a.Range(func(fd protoreflect.FieldDescriptor, av protoreflect.Value) bool {
+		if !b.Has(fd) || !equalField(fd, av, b.Get(fd)) {
+			eq = false
+		}
+		return eq
+	})
+	return eq
+}
+
+func countSet(m protoreflect.Message) int {
+	n := 0
+	m.Range(func(protoreflect.FieldDescriptor, protoreflect.Value) bool {
+		n++
+		return true
+	})
+	return n
+}
+
+func equalField(fd protoreflect.FieldDescriptor, a, b protoreflect.Value) bool {
+	switch {
+	case fd.IsMap():
+		return equalMapField(fd, a.Map(), b.Map())
+	case fd.IsList():
+		return equalListField(fd, a.List(), b.List())
+	default:
+		return equalOfKind(fd.Kind(), a, b)
+	}
+}
+
+func equalListField(fd protoreflect.FieldDescriptor, a, b protoreflect.List) bool {
+	if a.Len() != b.Len() {
+		return false
+	}
+	for i := range a.Len() {
+		if !equalOfKind(fd.Kind(), a.Get(i), b.Get(i)) {
+			return false
+		}
+	}
+	return true
+}
+
+func equalMapField(fd protoreflect.FieldDescriptor, a, b protoreflect.Map) bool {
+	if a.Len() != b.Len() {
+		return false
+	}
+	kind := fd.MapValue().Kind()
+	eq := true
+	a.Range(func(k protoreflect.MapKey, av protoreflect.Value) bool {
+		if !b.Has(k) || !equalOfKind(kind, av, b.Get(k)) {
+			eq = false
+		}
+		return eq
+	})
+	return eq
 }
 
 func equalList(l protoreflect.List, fd protoreflect.FieldDescriptor, want *patchpb.ListValue, at patch.At) (bool, error) {

@@ -1,6 +1,7 @@
 package patchstruct_test
 
 import (
+	"math"
 	"reflect"
 	"testing"
 
@@ -30,6 +31,12 @@ type Mirror struct {
 
 	M_S_S map[string]string `json:"m_s_s"`
 	M_1   *Mirror           `json:"m_1"`
+
+	// A pointer, because opt_f64 declares explicit presence and that is how
+	// this engine spells it. Carried so that the equality rules the schema
+	// spells out for floating point are checked here too, not only in
+	// patchproto.
+	Opt_F64 *float64 `json:"opt_f64"`
 }
 
 // retarget rewrites every Field.name in a Patch to Field.json_name.
@@ -164,10 +171,44 @@ func agrees(c *conformancepb.Case, got Mirror, gotErr error) (bool, string) {
 	if !ok {
 		return false, "the expected output is not representable in the mirror"
 	}
-	if !reflect.DeepEqual(normalize(got), normalize(want)) {
+	if !sameMirror(got, want) {
 		return false, "outputs differ"
 	}
 	return true, ""
+}
+
+// sameMirror compares two mirrors under the schema's equality rule, which
+// differs from reflect.DeepEqual in one place: NaN equals NaN. The float and
+// the recursive pointer are compared by hand and cleared, and DeepEqual
+// decides the flat remainder.
+func sameMirror(a, b Mirror) bool {
+	a, b = normalize(a), normalize(b)
+
+	if !sameFloat(a.Opt_F64, b.Opt_F64) {
+		return false
+	}
+	a.Opt_F64, b.Opt_F64 = nil, nil
+
+	if (a.M_1 == nil) != (b.M_1 == nil) {
+		return false
+	}
+	if a.M_1 != nil {
+		if !sameMirror(*a.M_1, *b.M_1) {
+			return false
+		}
+		a.M_1, b.M_1 = nil, nil
+	}
+	return reflect.DeepEqual(a, b)
+}
+
+func sameFloat(a, b *float64) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	if math.IsNaN(*a) || math.IsNaN(*b) {
+		return math.IsNaN(*a) && math.IsNaN(*b)
+	}
+	return *a == *b
 }
 
 // normalize erases the difference between a nil and an empty collection, which
@@ -198,6 +239,8 @@ func toMirror(v any) (Mirror, bool) {
 		GetRS_1() []string
 		GetMSS() map[string]string
 		GetM_1() *sample.Value
+		HasOptF64() bool
+		GetOptF64() float64
 	}
 	if v == nil {
 		return Mirror{}, true
@@ -218,16 +261,7 @@ func toMirror(v any) (Mirror, bool) {
 		return m, true
 	}
 
-	m := Mirror{
-		S_1:   sv.GetS_1(),
-		S_2:   sv.GetS_2(),
-		S_3:   sv.GetS_3(),
-		I32_1: sv.GetI32_1(),
-		I64_1: sv.GetI64_1(),
-		R_S_1: sv.GetRS_1(),
-		M_S_S: sv.GetMSS(),
-	}
-	return m, true
+	return mirrorOf(sv), true
 }
 
 func mirrorOf(sv interface {
@@ -238,8 +272,10 @@ func mirrorOf(sv interface {
 	GetI64_1() int64
 	GetRS_1() []string
 	GetMSS() map[string]string
+	HasOptF64() bool
+	GetOptF64() float64
 }) Mirror {
-	return Mirror{
+	m := Mirror{
 		S_1:   sv.GetS_1(),
 		S_2:   sv.GetS_2(),
 		S_3:   sv.GetS_3(),
@@ -248,4 +284,9 @@ func mirrorOf(sv interface {
 		R_S_1: sv.GetRS_1(),
 		M_S_S: sv.GetMSS(),
 	}
+	if sv.HasOptF64() {
+		v := sv.GetOptF64()
+		m.Opt_F64 = &v
+	}
+	return m
 }

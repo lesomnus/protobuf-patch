@@ -1,0 +1,131 @@
+# EQUALITY is the only comparison the format performs, so the schema spells it
+# out rather than leaving it to whatever each implementation's language calls
+# equality. Left undefined, three engines invented three different rules.
+#
+# Unknown fields on the target are the fourth clause of the rule; they cannot
+# be written from a textproto input, so they are pinned in patchproto's own
+# tests instead.
+
+cases {
+  name: "a_message_is_compared_exactly_not_as_a_subset"
+  doc: "A field absent from `fields` asserts the target does not have it set. For a subset assertion, test the fields individually."
+  input { m_1 { s_1: "v" s_2: "also here" } }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "m_1" } } } }
+      test { value { m { fields {
+        key { name: "s_1" }
+        value { s: "v" }
+      } } } }
+    } }
+  }
+  error: "test failed"
+}
+
+cases {
+  name: "a_message_equals_the_value_that_names_every_field"
+  doc: "The other side of exactness: naming all of them holds."
+  input { m_1 { s_1: "v" s_2: "also here" } }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "m_1" } } } }
+      test { value { m {
+        fields { key { name: "s_1" } value { s: "v" } }
+        fields { key { name: "s_2" } value { s: "also here" } }
+      } } }
+    } }
+  }
+  output { m_1 { s_1: "v" s_2: "also here" } }
+}
+
+cases {
+  name: "nan_equals_nan"
+  doc: "A test asserts what a document holds, not an arithmetic predicate. Under IEEE inequality a Patch could assign a NaN and then be unable to assert the value it had just written."
+  input { opt_f64: nan }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "opt_f64" } } } }
+      test { value { f64: nan } }
+    } }
+  }
+  output { opt_f64: nan }
+}
+
+cases {
+  name: "nan_nested_in_a_message_equals_nan"
+  doc: "The answer must not depend on whether the float sits at the top level or inside a message; those were separate code paths and disagreed."
+  input { m_1 { opt_f64: nan } }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "m_1" } } } }
+      test { value { m { fields {
+        key { name: "opt_f64" }
+        value { f64: nan }
+      } } } }
+    } }
+  }
+  output { m_1 { opt_f64: nan } }
+}
+
+cases {
+  name: "nan_does_not_equal_a_number"
+  doc: "Only NaN is exempt from IEEE comparison, and only against another NaN."
+  input { opt_f64: nan }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "opt_f64" } } } }
+      test { value { f64: 1.0 } }
+    } }
+  }
+  error: "test failed"
+}
+
+cases {
+  name: "negative_zero_equals_positive_zero"
+  doc: "IEEE says so, and nothing about a stored document argues for distinguishing them."
+  input { opt_f64: -0.0 }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "opt_f64" } } } }
+      test { value { f64: 0.0 } }
+    } }
+  }
+  output { opt_f64: -0.0 }
+}
+
+cases {
+  name: "a_list_is_compared_elementwise_in_order"
+  doc: "Equal lengths, and elementwise equal in order."
+  input { r_s_1: "a" r_s_1: "b" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "r_s_1" } } } }
+      test { value { l { values { s: "b" } values { s: "a" } } } }
+    } }
+  }
+  error: "test failed"
+}
+
+cases {
+  name: "a_map_is_compared_by_key_set_and_values"
+  doc: "A Value naming fewer keys than the map holds is unequal, by the same exactness rule as a message."
+  input { m_s_s { key: "a" value: "1" } m_s_s { key: "b" value: "2" } }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "m_s_s" } } } }
+      test { value { map { entries {
+        key { s: "a" }
+        value { s: "1" }
+      } } } }
+    } }
+  }
+  error: "test failed"
+}

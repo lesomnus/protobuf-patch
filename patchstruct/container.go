@@ -135,7 +135,7 @@ func testContainer(c cont, t *patchpb.Test, at patch.At) error {
 	if err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(c.v.Interface(), want.Interface()) {
+	if !equalDeep(c.v, want) {
 		return patch.Errf(patch.CodeTestFailed, at, "%s does not equal the value", c.describe())
 	}
 	return nil

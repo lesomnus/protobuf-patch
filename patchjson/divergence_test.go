@@ -50,6 +50,12 @@ const (
 	// reason than the case is pinning.
 	causeNoNumbers = "a field number cannot be checked without a schema, so it is refused first"
 
+	// RFC 8259 has no NaN literal, so a JSON document cannot hold one at all.
+	// ProtoJSON spells it as the string "NaN", which is a string and not a
+	// number, so a float arm cannot match it. The schema's rule that NaN
+	// equals NaN is therefore unreachable here rather than contradicted.
+	causeNoNaN = "JSON has no NaN; ProtoJSON writes it as the string \"NaN\", which no float arm matches"
+
 	// A JSON document does not name its own type, so there is nothing to
 	// compare Patch.message_type against unless the caller supplies a name
 	// with ExpectType. The corpus runner does not, since it is testing the
@@ -58,6 +64,9 @@ const (
 )
 
 var knownDivergences = map[string]string{
+	"nan_equals_nan":                     causeNoNaN,
+	"nan_nested_in_a_message_equals_nan": causeNoNaN,
+
 	"remove_clears_a_declared_but_unset_field": causeDeclared,
 	"container_assign_fails_before_clearing":   causeDeclared,
 
