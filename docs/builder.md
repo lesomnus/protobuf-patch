@@ -65,12 +65,33 @@ patch.Container().Assign(patch.Msg(
 ```
 
 **`.In(...)`** navigates in first. Every container along the way must already
-exist — a patch never creates one.
+exist — use `InOrCreate` to have the missing ones made.
 
 ```go
 patch.Target(patch.Name("s_1")).In(patch.Name("m_1")).Assign(patch.Str("deep"))
 // {m_1:{}} → {m_1:{s_1:"deep"}}
 ```
+
+The path segments read **outward-in, in document order**: `In(a, b)` descends to
+`a`, then to `b`. The entry as a whole reads **leaf-first** — `Target(s_1).In(m_1,
+m_1)` addresses `m_1.m_1.s_1` — because an entry *requires* a scope and only
+*may* add a path, so the builder starts where the requirement is.
+
+**`.InOrCreate(...)`** navigates in, making the containers that are missing.
+
+```go
+patch.Target(patch.Name("s_1")).InOrCreate(patch.Name("m_1"), patch.Name("m_1")).
+    Assign(patch.Str("deep"))
+// {}                        → {m_1:{m_1:{s_1:"deep"}}}
+// {m_1:{s_2:"keep me"}}     → {m_1:{m_1:{s_1:"deep"} s_2:"keep me"}}
+```
+
+It creates **only** what is missing. Assigning a nested literal reaches the same
+place and replaces the container, dropping `s_2`. A list index outside the slice
+is still an error — growing a list shifts every index after it.
+
+The returned builder has no `Test` or `Exists`: creating a container is a
+mutation, and an assertion must not mutate what it asserts about.
 
 **`.Skip()`** tolerates a target that does not exist.
 
@@ -312,6 +333,7 @@ expressible:
 | an entry with no operation | only a terminator returns an `Op` |
 | a `test` that tolerates a missing target | `Skip()` returns a builder with no `Test` or `Exists` |
 | a `move` or `copy` onto a container | `Container()` returns a builder with no `Move` or `Copy` |
+| a `test` that creates the containers it asserts about | `InOrCreate()` returns a builder with no `Test` or `Exists` |
 
 An empty target list matters most: on the wire it would be indistinguishable
 from addressing the whole container, and the format gives that the most

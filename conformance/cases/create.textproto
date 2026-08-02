@@ -1,0 +1,187 @@
+# A path does not create containers by default. on_absent_path is how an author
+# asks for it ON THE WIRE, the same way on_missing records tolerance.
+#
+# It creates what is missing and ONLY what is missing, which is what separates
+# it from assigning a nested literal — that replaces the container and drops
+# whatever the document did not name.
+
+cases {
+  name: "a_path_does_not_create_by_default"
+  doc: "The rule the option is an exception to."
+  input {}
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_1" } } }
+      targets { selectors { key { field { name: "s_1" } } } }
+      assign { value { s: "deep" } }
+    } }
+  }
+  error: "path does not reach a container"
+}
+
+cases {
+  name: "on_absent_path_creates_one_level"
+  doc: "Asked for on the wire, so the tolerance is the author's recorded decision."
+  input {}
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_1" } } }
+      on_absent_path: ON_ABSENT_PATH_CREATE
+      targets { selectors { key { field { name: "s_1" } } } }
+      assign { value { s: "deep" } }
+    } }
+  }
+  output { m_1 { s_1: "deep" } }
+}
+
+cases {
+  name: "on_absent_path_creates_every_level"
+  doc: "One entry replaces the chain of empty assigns it used to take."
+  input {}
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path {
+        segments { field { name: "m_1" } }
+        segments { field { name: "m_1" } }
+      }
+      on_absent_path: ON_ABSENT_PATH_CREATE
+      targets { selectors { key { field { name: "s_1" } } } }
+      assign { value { s: "deep" } }
+    } }
+  }
+  output { m_1 { m_1 { s_1: "deep" } } }
+}
+
+cases {
+  name: "creation_leaves_what_is_already_there"
+  doc: "The whole difference from assigning a nested literal, which would drop s_2."
+  input { m_1 { s_2: "please keep me" } }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path {
+        segments { field { name: "m_1" } }
+        segments { field { name: "m_1" } }
+      }
+      on_absent_path: ON_ABSENT_PATH_CREATE
+      targets { selectors { key { field { name: "s_1" } } } }
+      assign { value { s: "deep" } }
+    } }
+  }
+  output { m_1 { m_1 { s_1: "deep" } s_2: "please keep me" } }
+}
+
+cases {
+  name: "on_absent_path_creates_a_map_entry"
+  doc: "A map key with no entry is a position that exists but holds nothing, so it can be filled."
+  input {}
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path {
+        segments { field { name: "m_s_m" } }
+        segments { map_key { s: "k" } }
+      }
+      on_absent_path: ON_ABSENT_PATH_CREATE
+      targets { selectors { key { field { name: "s_1" } } } }
+      assign { value { s: "made" } }
+    } }
+  }
+  output { m_s_m { key: "k" value { s_1: "made" } } }
+}
+
+cases {
+  name: "a_list_index_is_never_created"
+  doc: "Growing a list shifts every index after it, and insert with append is what grows one. So this stays an error even when creation is asked for."
+  input {}
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path {
+        segments { field { name: "r_m_1" } }
+        segments { index: 3 }
+      }
+      on_absent_path: ON_ABSENT_PATH_CREATE
+      targets { selectors { key { field { name: "s_1" } } } }
+      assign { value { s: "no" } }
+    } }
+  }
+  error: "path does not reach a container"
+}
+
+cases {
+  name: "an_undeclared_field_is_never_created"
+  doc: "There is nothing to create: the descriptor does not have it."
+  input {}
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "no_such_field" } } }
+      on_absent_path: ON_ABSENT_PATH_CREATE
+      targets { selectors { key { field { name: "s_1" } } } }
+      assign { value { s: "no" } }
+    } }
+  }
+  error: "path does not reach a container"
+}
+
+cases {
+  name: "a_test_may_not_ask_for_creation"
+  doc: "Creating a container is a mutation, and a passing test would leave the target holding one the document never asked for."
+  input {}
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_1" } } }
+      on_absent_path: ON_ABSENT_PATH_CREATE
+      targets { selectors { key { field { name: "s_1" } } } }
+      test { exists: false }
+    } }
+  }
+  error: "test must not carry a softening policy"
+}
+
+cases {
+  name: "creation_is_undone_when_a_later_entry_fails"
+  doc: "Atomicity covers it: the containers were made on the private copy, which is discarded."
+  input { s_1: "orig" }
+  patch {
+    message_type: "sample.Value"
+    delta {
+      entries {
+        path { segments { field { name: "m_1" } } }
+        on_absent_path: ON_ABSENT_PATH_CREATE
+        targets { selectors { key { field { name: "s_1" } } } }
+        assign { value { s: "deep" } }
+      }
+      entries {
+        targets { selectors { key { field { name: "s_1" } } } }
+        test { value { s: "will not hold" } }
+      }
+    }
+  }
+  error: "test failed"
+}
+
+cases {
+  name: "a_move_source_is_never_created"
+  doc: "Creating a source would mean reading from something the entry had just made empty."
+  input { s_1: "v" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      on_absent_path: ON_ABSENT_PATH_CREATE
+      targets { selectors { key { field { name: "s_2" } } } }
+      move {
+        from {
+          path { segments { field { name: "m_1" } } }
+          key { field { name: "s_1" } }
+        }
+      }
+    } }
+  }
+  error: "path does not reach a container"
+}

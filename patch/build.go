@@ -101,6 +101,7 @@ type draft struct {
 	targets   []Selectorer
 	container bool
 	skip      bool
+	create    bool
 	hasAppend bool
 	err       error
 }
@@ -159,6 +160,10 @@ func (d *draft) build(set func(*patchpb.Entry_builder)) Op {
 		om := patchpb.OnMissing_ON_MISSING_SKIP
 		b.OnMissing = &om
 	}
+	if d.create {
+		oap := patchpb.OnAbsentPath_ON_ABSENT_PATH_CREATE
+		b.OnAbsentPath = &oap
+	}
 	set(&b)
 	return Op{pb: b.Build()}
 }
@@ -175,10 +180,34 @@ func (d *draft) rejectAppend(op string) {
 type TargetScope struct{ d *draft }
 
 // In navigates into a nested container before the operation applies. Every
-// container along the path must already exist; a Patch never creates them.
+// container along the path must already exist; use InOrCreate to have the
+// missing ones made.
+//
+// The segments read OUTWARD-IN, in document order: In(a, b) descends to a,
+// then to b. Note that the entry as a whole reads leaf-first —
+// Target(s_1).In(m_1, m_1) addresses m_1.m_1.s_1 — because the scope is what
+// an entry requires and the path is what it may add.
 func (b *TargetScope) In(path ...Keyer) *TargetScope {
 	b.d.path = path
 	return b
+}
+
+// InOrCreate is In, creating any container along the path that is missing —
+// an unset singular message field, or a map key with no entry under it.
+//
+// It creates ONLY what is missing and leaves everything else exactly as it is.
+// That is what distinguishes it from assigning a nested literal, which
+// replaces the container and drops whatever the document did not name.
+//
+// A list index outside the slice is still an error: growing a list shifts
+// every index after it, and Insert with Append is what grows a list.
+//
+// The returned builder offers no Test or Exists. Creating a container is a
+// mutation, and an assertion must not mutate the thing it is asserting about.
+func (b *TargetScope) InOrCreate(path ...Keyer) *WritingScope {
+	b.d.path = path
+	b.d.create = true
+	return &WritingScope{b.d}
 }
 
 // Skip tolerates a target that resolves to no location, instead of failing.
@@ -215,6 +244,33 @@ func (b *TargetScope) Copy(from Location) Op { return copyOp(b.d, from) }
 // Nest applies the operations to each target, which must be a container.
 func (b *TargetScope) Nest(first Op, rest ...Op) Op { return nestOp(b.d, first, rest...) }
 
+// WritingScope builds an entry that creates the containers along its path. It
+// is TargetScope minus the assertions, which must never mutate.
+type WritingScope struct{ d *draft }
+
+// Skip tolerates a target that resolves to no location, instead of failing.
+// Creating the path and tolerating a missing target inside it are independent
+// decisions, and both are recorded on the wire.
+func (b *WritingScope) Skip() *TolerantScope { b.d.skip = true; return &TolerantScope{b.d} }
+
+// Remove deletes the targets.
+func (b *WritingScope) Remove() Op { return removeOp(b.d) }
+
+// Insert creates value at the targets without overwriting.
+func (b *WritingScope) Insert(value Value) Op { return insertOp(b.d, value) }
+
+// Assign sets the targets to value, overwriting whatever is there.
+func (b *WritingScope) Assign(value Value) Op { return assignOp(b.d, value) }
+
+// Move relocates the value at from to the targets, clearing the source.
+func (b *WritingScope) Move(from Location) Op { return moveOp(b.d, from) }
+
+// Copy writes the value at from to the targets, leaving the source in place.
+func (b *WritingScope) Copy(from Location) Op { return copyOp(b.d, from) }
+
+// Nest applies the operations to each target, which must be a container.
+func (b *WritingScope) Nest(first Op, rest ...Op) Op { return nestOp(b.d, first, rest...) }
+
 // TolerantScope builds an entry that skips targets which do not exist. It is
 // TargetScope minus the assertions, which must never be skippable.
 type TolerantScope struct{ d *draft }
@@ -222,6 +278,13 @@ type TolerantScope struct{ d *draft }
 // In navigates into a nested container before the operation applies.
 func (b *TolerantScope) In(path ...Keyer) *TolerantScope {
 	b.d.path = path
+	return b
+}
+
+// InOrCreate is In, creating any container along the path that is missing.
+func (b *TolerantScope) InOrCreate(path ...Keyer) *TolerantScope {
+	b.d.path = path
+	b.d.create = true
 	return b
 }
 
@@ -255,6 +318,17 @@ func (b *ContainerScope) In(path ...Keyer) *ContainerScope {
 	return b
 }
 
+// InOrCreate is In, creating any container along the path that is missing —
+// including the subject itself when the last segment names it.
+//
+// The returned builder offers no Test or Exists, for the same reason
+// TargetScope.InOrCreate does not.
+func (b *ContainerScope) InOrCreate(path ...Keyer) *ContainerWritingScope {
+	b.d.path = path
+	b.d.create = true
+	return &ContainerWritingScope{b.d}
+}
+
 // Remove empties the container: every field cleared, every element or entry
 // dropped.
 func (b *ContainerScope) Remove() Op { return removeOp(b.d) }
@@ -273,6 +347,22 @@ func (b *ContainerScope) Assign(value Value) Op { return assignOp(b.d, value) }
 
 // Nest applies the operations to the container.
 func (b *ContainerScope) Nest(first Op, rest ...Op) Op { return nestOp(b.d, first, rest...) }
+
+// ContainerWritingScope builds a container-scoped entry that creates the
+// containers along its path. It is ContainerScope minus the assertions.
+type ContainerWritingScope struct{ d *draft }
+
+// Remove empties the container.
+func (b *ContainerWritingScope) Remove() Op { return removeOp(b.d) }
+
+// Insert fills only what the container does not already have.
+func (b *ContainerWritingScope) Insert(value Value) Op { return insertOp(b.d, value) }
+
+// Assign replaces the container wholesale.
+func (b *ContainerWritingScope) Assign(value Value) Op { return assignOp(b.d, value) }
+
+// Nest applies the operations to the container.
+func (b *ContainerWritingScope) Nest(first Op, rest ...Op) Op { return nestOp(b.d, first, rest...) }
 
 func removeOp(d *draft) Op {
 	d.rejectAppend("remove")

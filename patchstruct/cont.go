@@ -145,9 +145,9 @@ func clearValue(v reflect.Value) {
 	v.Set(reflect.Zero(v.Type()))
 }
 
-func navigate(c cont, p *patchpb.Path, at patch.At) (cont, error) {
+func navigate(c cont, p *patchpb.Path, create bool, at patch.At) (cont, error) {
 	for i, k := range p.GetSegments() {
-		next, err := descend(c, k, at.Index("segments", i))
+		next, err := descend(c, k, create, at.Index("segments", i))
 		if err != nil {
 			return cont{}, err
 		}
@@ -156,14 +156,25 @@ func navigate(c cont, p *patchpb.Path, at patch.At) (cont, error) {
 	return c, nil
 }
 
-func descend(c cont, k *patchpb.Key, at patch.At) (cont, error) {
+func descend(c cont, k *patchpb.Key, create bool, at patch.At) (cont, error) {
 	l, err := resolveKey(c, k, at)
 	if err != nil {
 		return cont{}, err
 	}
-	if l.noSlot || l.emptySlot {
+	// noSlot is a slice index outside the slice, which cannot be created
+	// whatever the document asks. emptySlot is an absent map key, which can
+	// when the map's value type is one this engine can descend into.
+	if l.noSlot || (l.emptySlot && !create) {
 		return cont{}, patch.Errf(patch.CodePathNotReached, at,
-			"nothing at that position in %s; a path never creates one", c.describe())
+			"nothing at that position in %s; set on_absent_path to create it deliberately", c.describe())
+	}
+	if l.emptySlot {
+		et := c.v.Type().Elem()
+		nv := reflect.New(et).Elem()
+		if et.Kind() == reflect.Pointer {
+			nv.Set(reflect.New(et.Elem()))
+		}
+		c.v.SetMapIndex(l.key, nv)
 	}
 
 	v, err := at_(c, l, at)
@@ -172,8 +183,11 @@ func descend(c cont, k *patchpb.Key, at patch.At) (cont, error) {
 	}
 	if v.Kind() == reflect.Ptr {
 		if v.IsNil() {
-			return cont{}, patch.Errf(patch.CodePathNotReached, at,
-				"that position is nil; a path never creates a container")
+			if !create || !v.CanSet() {
+				return cont{}, patch.Errf(patch.CodePathNotReached, at,
+					"that position is nil; set on_absent_path to create it deliberately")
+			}
+			v.Set(reflect.New(v.Type().Elem()))
 		}
 		v = v.Elem()
 	}

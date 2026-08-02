@@ -67,6 +67,12 @@ const (
 	// message, refuses.
 	causeObjectIsAMap = "an object stands in for both a message and a map, and behaves like the map"
 
+	// Creating a container has to decide whether to make an object or an
+	// array, and with no schema there is nothing to decide it with. It makes
+	// an object, so a path that then descends by index fails there rather
+	// than where patchproto fails.
+	causeCreateShape = "creating a container cannot know whether to make an object or an array"
+
 	// A JSON document does not name its own type, so there is nothing to
 	// compare Patch.message_type against unless the caller supplies a name
 	// with ExpectType. The corpus runner does not, since it is testing the
@@ -75,6 +81,9 @@ const (
 )
 
 var knownDivergences = map[string]string{
+	"a_list_index_is_never_created":        causeCreateShape,
+	"an_undeclared_field_is_never_created": causeDeclared,
+
 	"every_entry_removes_all_of_them":             causeEmptyContainer,
 	"every_entry_on_an_empty_map_selects_nothing": causeEmptyContainer,
 	"every_entry_still_checks_the_arm":            causeNoTypes,

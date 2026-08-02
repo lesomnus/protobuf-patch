@@ -76,9 +76,10 @@ const (
 	// against Entry.container.
 	CodeIllegalScope
 
-	// CodeTestNotStrict is a test entry with on_missing set. A test reads
-	// vacancy rather than being governed by it, so tolerating a missing target
-	// would let the assertion pass without being evaluated.
+	// CodeTestNotStrict is a test entry carrying a policy that would soften it:
+	// on_missing, which would let the assertion pass without being evaluated
+	// because a test reads vacancy rather than being governed by it; or
+	// on_absent_path, which would make a passing test mutate the target.
 	CodeTestNotStrict
 
 	// --- Bound to a target descriptor. ---
@@ -167,7 +168,7 @@ var codeNames = map[Code]string{
 	CodeFieldNoIdentifier:    "field has no identifier",
 	CodeIllegalSelector:      "illegal selector for operation",
 	CodeIllegalScope:         "illegal scope for operation",
-	CodeTestNotStrict:        "test must not tolerate a missing target",
+	CodeTestNotStrict:        "test must not carry a softening policy",
 	CodeMessageTypeMismatch:  "message type mismatch",
 	CodeReaderRevisionTooOld: "reader revision too old",
 	CodeIllegalArm:           "illegal arm for target",

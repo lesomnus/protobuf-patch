@@ -160,9 +160,14 @@ message MapKey {
 // container that `nest` handed it.
 //
 // Every container along the path must already exist, and a path that descends
-// through a `Key` that reaches nothing is an error. A Patch never auto-creates intermediate
-// containers, and `Entry.on_missing` never applies to a Path. (Create a
-// container with an explicit `assign` in an earlier entry.)
+// through a `Key` that reaches nothing is an error. `Entry.on_missing` never
+// applies to a Path.
+//
+// A Patch does not auto-create intermediate containers by default. An author
+// who wants that must ask for it on the wire with
+// `Entry.on_absent_path = ON_ABSENT_PATH_CREATE`, which creates what is
+// missing and only what is missing. As with `on_missing`, tolerance is a
+// recorded decision and never a reader's default.
 //
 // "Exist" is presence, not contents. A singular message field must be SET; an
 // unset one is an error, because descending into it would have to create it.

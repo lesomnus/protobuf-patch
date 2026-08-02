@@ -176,7 +176,8 @@ func applyDelta(c cont, d *patchpb.Delta, at patch.At) error {
 }
 
 func applyEntry(base cont, e *patchpb.Entry, at patch.At) error {
-	c, err := navigate(base, e.GetPath(), at.Sub("path"))
+	create := e.GetOnAbsentPath() == patchpb.OnAbsentPath_ON_ABSENT_PATH_CREATE
+	c, err := navigate(base, e.GetPath(), create, at.Sub("path"))
 	if err != nil {
 		return err
 	}
@@ -430,7 +431,8 @@ func relocate(base, c cont, locs []loc, from *patchpb.Location, clear bool, at p
 func resolveSource(base, c cont, from *patchpb.Location, at patch.At) (cont, loc, error) {
 	src := c
 	if from.WhichOrigin() == patchpb.Location_Path_case {
-		s, err := navigate(base, from.GetPath(), at.Sub("path"))
+		// A source is never created.
+		s, err := navigate(base, from.GetPath(), false, at.Sub("path"))
 		if err != nil {
 			return cont{}, loc{}, err
 		}

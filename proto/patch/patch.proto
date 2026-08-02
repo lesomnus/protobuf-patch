@@ -76,7 +76,9 @@ option go_package = "github.com/lesomnus/protobuf-patch/patchpb";
 //     MUST NOT merely ignore unknown fields. A Patch therefore MUST NOT be
 //     carried over a transport that discards them (e.g. ProtoJSON with
 //     DiscardUnknown).
-//   - An `OnMissing` value not declared in this file.
+//   - An `OnMissing` or `OnAbsentPath` value not declared in this file.
+//   - `Entry.on_absent_path` set on a `test`. Creating a container is a
+//     mutation, and a `test` must not mutate.
 //   - An unset `oneof` where one is required: `Entry.scope`, `Entry.kind`,
 //     `Key.kind`, `MapKey.kind`, `Selector.kind`, `Value.kind`, `Test.want`,
 //     `Location.origin`.
@@ -101,7 +103,9 @@ option go_package = "github.com/lesomnus/protobuf-patch/patchpb";
 //   - A `Value.e` that the target's CLOSED enum does not declare.
 //   - `Entry.path` that does not reach an existing container: descending into
 //     an unset singular message field, or through a `Key` that names no slot
-//     or an empty one. `Entry.on_missing` never applies to `Entry.path`.
+//     or an empty one. `Entry.on_missing` never applies to `Entry.path`;
+//     `Entry.on_absent_path` is what governs it, and only for what can be
+//     created.
 //   - A `test` that does not hold.
 //   - A `test` entry whose selectors resolve to zero locations, or whose
 //     `on_missing` is set to anything but the default. A `test` must never be
@@ -351,6 +355,23 @@ message Entry {
   // whose identifiers disagree, or to a failed `test`.
   OnMissing on_missing = 4;
 
+  // How to treat a container along `path` that does not exist. Defaults to
+  // fail, which is the rule stated on `Path`.
+  //
+  // This governs ONLY `Entry.path`, and only for kinds other than `test`. It
+  // does NOT reach `Location.path`: creating a source container would mean
+  // reading from something the entry had just made empty, which is either an
+  // error or a no-op whichever way it is defined.
+  //
+  // It may not be set on a `test`. Creating a container is a mutation, and a
+  // `test` MUST NOT mutate — a passing test would otherwise leave the target
+  // holding a container the document never asked for.
+  //
+  // Field 16 rather than one of the reserved single-byte tags: those are held
+  // for future operations, which every entry carries, while this is a policy
+  // most entries leave unset.
+  OnAbsentPath on_absent_path = 16;
+
   // Exactly one operation. Required.
   oneof kind {
     Remove remove = 5;
@@ -376,6 +397,31 @@ message Targets {
 // carries no data; it is a message rather than a bool so that it can gain
 // options later without changing `Entry.scope`.
 message Container {}
+
+// OnAbsentPath says what to do when `Entry.path` reaches a container that does
+// not exist.
+enum OnAbsentPath {
+  // An absent container aborts the Patch. As with `OnMissing`, this is the
+  // ONLY encoding of "fail": the safe behavior is the zero value and there is
+  // no second way to spell it.
+  ON_ABSENT_PATH_UNSPECIFIED = 0;
+
+  // Create what is missing, and ONLY what is missing.
+  //
+  //   - An unset singular message field is set to an empty message.
+  //   - A map key with no entry, whose value type is a message, gains an empty
+  //     entry.
+  //   - Anything already there is left exactly as it is. This is not `assign`
+  //     of a nested literal, which replaces the container and drops whatever
+  //     the document did not name.
+  //
+  // A list index outside [0, len) is still an ERROR. It cannot be created:
+  // growing a list shifts the indices of everything after it, and `insert`
+  // with `Selector.append` is what grows a list. So is a field the message
+  // does not declare, and so is a segment naming a scalar — in both cases
+  // there is nothing that could be created.
+  ON_ABSENT_PATH_CREATE = 1;
+}
 
 enum OnMissing {
   // A missing target aborts the Patch. This is the ONLY encoding of "fail" —

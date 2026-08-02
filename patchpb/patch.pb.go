@@ -20,6 +20,66 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// OnAbsentPath says what to do when `Entry.path` reaches a container that does
+// not exist.
+type OnAbsentPath int32
+
+const (
+	// An absent container aborts the Patch. As with `OnMissing`, this is the
+	// ONLY encoding of "fail": the safe behavior is the zero value and there is
+	// no second way to spell it.
+	OnAbsentPath_ON_ABSENT_PATH_UNSPECIFIED OnAbsentPath = 0
+	// Create what is missing, and ONLY what is missing.
+	//
+	//   - An unset singular message field is set to an empty message.
+	//   - A map key with no entry, whose value type is a message, gains an empty
+	//     entry.
+	//   - Anything already there is left exactly as it is. This is not `assign`
+	//     of a nested literal, which replaces the container and drops whatever
+	//     the document did not name.
+	//
+	// A list index outside [0, len) is still an ERROR. It cannot be created:
+	// growing a list shifts the indices of everything after it, and `insert`
+	// with `Selector.append` is what grows a list. So is a field the message
+	// does not declare, and so is a segment naming a scalar — in both cases
+	// there is nothing that could be created.
+	OnAbsentPath_ON_ABSENT_PATH_CREATE OnAbsentPath = 1
+)
+
+// Enum value maps for OnAbsentPath.
+var (
+	OnAbsentPath_name = map[int32]string{
+		0: "ON_ABSENT_PATH_UNSPECIFIED",
+		1: "ON_ABSENT_PATH_CREATE",
+	}
+	OnAbsentPath_value = map[string]int32{
+		"ON_ABSENT_PATH_UNSPECIFIED": 0,
+		"ON_ABSENT_PATH_CREATE":      1,
+	}
+)
+
+func (x OnAbsentPath) Enum() *OnAbsentPath {
+	p := new(OnAbsentPath)
+	*p = x
+	return p
+}
+
+func (x OnAbsentPath) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (OnAbsentPath) Descriptor() protoreflect.EnumDescriptor {
+	return file_patch_patch_proto_enumTypes[0].Descriptor()
+}
+
+func (OnAbsentPath) Type() protoreflect.EnumType {
+	return &file_patch_patch_proto_enumTypes[0]
+}
+
+func (x OnAbsentPath) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
 type OnMissing int32
 
 const (
@@ -55,11 +115,11 @@ func (x OnMissing) String() string {
 }
 
 func (OnMissing) Descriptor() protoreflect.EnumDescriptor {
-	return file_patch_patch_proto_enumTypes[0].Descriptor()
+	return file_patch_patch_proto_enumTypes[1].Descriptor()
 }
 
 func (OnMissing) Type() protoreflect.EnumType {
-	return &file_patch_patch_proto_enumTypes[0]
+	return &file_patch_patch_proto_enumTypes[1]
 }
 
 func (x OnMissing) Number() protoreflect.EnumNumber {
@@ -129,7 +189,9 @@ func (x OnMissing) Number() protoreflect.EnumNumber {
 //     MUST NOT merely ignore unknown fields. A Patch therefore MUST NOT be
 //     carried over a transport that discards them (e.g. ProtoJSON with
 //     DiscardUnknown).
-//   - An `OnMissing` value not declared in this file.
+//   - An `OnMissing` or `OnAbsentPath` value not declared in this file.
+//   - `Entry.on_absent_path` set on a `test`. Creating a container is a
+//     mutation, and a `test` must not mutate.
 //   - An unset `oneof` where one is required: `Entry.scope`, `Entry.kind`,
 //     `Key.kind`, `MapKey.kind`, `Selector.kind`, `Value.kind`, `Test.want`,
 //     `Location.origin`.
@@ -154,7 +216,9 @@ func (x OnMissing) Number() protoreflect.EnumNumber {
 //   - A `Value.e` that the target's CLOSED enum does not declare.
 //   - `Entry.path` that does not reach an existing container: descending into
 //     an unset singular message field, or through a `Key` that names no slot
-//     or an empty one. `Entry.on_missing` never applies to `Entry.path`.
+//     or an empty one. `Entry.on_missing` never applies to `Entry.path`;
+//     `Entry.on_absent_path` is what governs it, and only for what can be
+//     created.
 //   - A `test` that does not hold.
 //   - A `test` entry whose selectors resolve to zero locations, or whose
 //     `on_missing` is set to anything but the default. A `test` must never be
@@ -568,15 +632,16 @@ func (b0 Delta_builder) Build() *Delta {
 //
 // =================================================================
 type Entry struct {
-	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Path        *Path                  `protobuf:"bytes,1,opt,name=path"`
-	xxx_hidden_Scope       isEntry_Scope          `protobuf_oneof:"scope"`
-	xxx_hidden_OnMissing   OnMissing              `protobuf:"varint,4,opt,name=on_missing,json=onMissing,enum=patch.OnMissing"`
-	xxx_hidden_Kind        isEntry_Kind           `protobuf_oneof:"kind"`
-	XXX_raceDetectHookData protoimpl.RaceDetectHookData
-	XXX_presence           [1]uint32
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	state                   protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Path         *Path                  `protobuf:"bytes,1,opt,name=path"`
+	xxx_hidden_Scope        isEntry_Scope          `protobuf_oneof:"scope"`
+	xxx_hidden_OnMissing    OnMissing              `protobuf:"varint,4,opt,name=on_missing,json=onMissing,enum=patch.OnMissing"`
+	xxx_hidden_OnAbsentPath OnAbsentPath           `protobuf:"varint,16,opt,name=on_absent_path,json=onAbsentPath,enum=patch.OnAbsentPath"`
+	xxx_hidden_Kind         isEntry_Kind           `protobuf_oneof:"kind"`
+	XXX_raceDetectHookData  protoimpl.RaceDetectHookData
+	XXX_presence            [1]uint32
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *Entry) Reset() {
@@ -636,6 +701,15 @@ func (x *Entry) GetOnMissing() OnMissing {
 		}
 	}
 	return OnMissing_ON_MISSING_UNSPECIFIED
+}
+
+func (x *Entry) GetOnAbsentPath() OnAbsentPath {
+	if x != nil {
+		if protoimpl.X.Present(&(x.XXX_presence[0]), 3) {
+			return x.xxx_hidden_OnAbsentPath
+		}
+	}
+	return OnAbsentPath_ON_ABSENT_PATH_UNSPECIFIED
 }
 
 func (x *Entry) GetRemove() *Remove {
@@ -723,7 +797,12 @@ func (x *Entry) SetContainer(v *Container) {
 
 func (x *Entry) SetOnMissing(v OnMissing) {
 	x.xxx_hidden_OnMissing = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 4)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 5)
+}
+
+func (x *Entry) SetOnAbsentPath(v OnAbsentPath) {
+	x.xxx_hidden_OnAbsentPath = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 5)
 }
 
 func (x *Entry) SetRemove(v *Remove) {
@@ -819,6 +898,13 @@ func (x *Entry) HasOnMissing() bool {
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 2)
 }
 
+func (x *Entry) HasOnAbsentPath() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 3)
+}
+
 func (x *Entry) HasKind() bool {
 	if x == nil {
 		return false
@@ -905,6 +991,11 @@ func (x *Entry) ClearContainer() {
 func (x *Entry) ClearOnMissing() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
 	x.xxx_hidden_OnMissing = OnMissing_ON_MISSING_UNSPECIFIED
+}
+
+func (x *Entry) ClearOnAbsentPath() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 3)
+	x.xxx_hidden_OnAbsentPath = OnAbsentPath_ON_ABSENT_PATH_UNSPECIFIED
 }
 
 func (x *Entry) ClearKind() {
@@ -1027,6 +1118,22 @@ type Entry_builder struct {
 	// arms or unknown fields, to kind or declared-type mismatches, to a `Field`
 	// whose identifiers disagree, or to a failed `test`.
 	OnMissing *OnMissing
+	// How to treat a container along `path` that does not exist. Defaults to
+	// fail, which is the rule stated on `Path`.
+	//
+	// This governs ONLY `Entry.path`, and only for kinds other than `test`. It
+	// does NOT reach `Location.path`: creating a source container would mean
+	// reading from something the entry had just made empty, which is either an
+	// error or a no-op whichever way it is defined.
+	//
+	// It may not be set on a `test`. Creating a container is a mutation, and a
+	// `test` MUST NOT mutate — a passing test would otherwise leave the target
+	// holding a container the document never asked for.
+	//
+	// Field 16 rather than one of the reserved single-byte tags: those are held
+	// for future operations, which every entry carries, while this is a policy
+	// most entries leave unset.
+	OnAbsentPath *OnAbsentPath
 	// Exactly one operation. Required.
 
 	// Fields of oneof xxx_hidden_Kind:
@@ -1052,8 +1159,12 @@ func (b0 Entry_builder) Build() *Entry {
 		x.xxx_hidden_Scope = &entry_Container{b.Container}
 	}
 	if b.OnMissing != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 4)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 5)
 		x.xxx_hidden_OnMissing = *b.OnMissing
+	}
+	if b.OnAbsentPath != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 5)
+		x.xxx_hidden_OnAbsentPath = *b.OnAbsentPath
 	}
 	if b.Remove != nil {
 		x.xxx_hidden_Kind = &entry_Remove{b.Remove}
@@ -1841,13 +1952,14 @@ const file_patch_patch_proto_rawDesc = "" +
 	"\x13min_reader_revision\x18\x02 \x01(\rR\x11minReaderRevision\x12\"\n" +
 	"\x05delta\x18\x03 \x01(\v2\f.patch.DeltaR\x05delta\"/\n" +
 	"\x05Delta\x12&\n" +
-	"\aentries\x18\x01 \x03(\v2\f.patch.EntryR\aentries\"\xd5\x03\n" +
+	"\aentries\x18\x01 \x03(\v2\f.patch.EntryR\aentries\"\x90\x04\n" +
 	"\x05Entry\x12\x1f\n" +
 	"\x04path\x18\x01 \x01(\v2\v.patch.PathR\x04path\x12*\n" +
 	"\atargets\x18\x02 \x01(\v2\x0e.patch.TargetsH\x00R\atargets\x120\n" +
 	"\tcontainer\x18\x03 \x01(\v2\x10.patch.ContainerH\x00R\tcontainer\x12/\n" +
 	"\n" +
-	"on_missing\x18\x04 \x01(\x0e2\x10.patch.OnMissingR\tonMissing\x12'\n" +
+	"on_missing\x18\x04 \x01(\x0e2\x10.patch.OnMissingR\tonMissing\x129\n" +
+	"\x0eon_absent_path\x18\x10 \x01(\x0e2\x13.patch.OnAbsentPathR\fonAbsentPath\x12'\n" +
 	"\x06remove\x18\x05 \x01(\v2\r.patch.RemoveH\x01R\x06remove\x12!\n" +
 	"\x04test\x18\x06 \x01(\v2\v.patch.TestH\x01R\x04test\x12'\n" +
 	"\x06insert\x18\a \x01(\v2\r.patch.InsertH\x01R\x06insert\x12'\n" +
@@ -1875,58 +1987,63 @@ const file_patch_patch_proto_rawDesc = "" +
 	"\x04Copy\x12#\n" +
 	"\x04from\x18\x01 \x01(\v2\x0f.patch.LocationR\x04from\"*\n" +
 	"\x04Nest\x12\"\n" +
-	"\x05delta\x18\x01 \x01(\v2\f.patch.DeltaR\x05delta*<\n" +
+	"\x05delta\x18\x01 \x01(\v2\f.patch.DeltaR\x05delta*I\n" +
+	"\fOnAbsentPath\x12\x1e\n" +
+	"\x1aON_ABSENT_PATH_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15ON_ABSENT_PATH_CREATE\x10\x01*<\n" +
 	"\tOnMissing\x12\x1a\n" +
 	"\x16ON_MISSING_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fON_MISSING_SKIP\x10\x01B3Z*github.com/lesomnus/protobuf-patch/patchpb\x92\x03\x04\b\x01\x10\x01b\beditionsp\xe8\a"
 
-var file_patch_patch_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_patch_patch_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_patch_patch_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_patch_patch_proto_goTypes = []any{
-	(OnMissing)(0),    // 0: patch.OnMissing
-	(*Patch)(nil),     // 1: patch.Patch
-	(*Delta)(nil),     // 2: patch.Delta
-	(*Entry)(nil),     // 3: patch.Entry
-	(*Targets)(nil),   // 4: patch.Targets
-	(*Container)(nil), // 5: patch.Container
-	(*Remove)(nil),    // 6: patch.Remove
-	(*Test)(nil),      // 7: patch.Test
-	(*Insert)(nil),    // 8: patch.Insert
-	(*Assign)(nil),    // 9: patch.Assign
-	(*Move)(nil),      // 10: patch.Move
-	(*Copy)(nil),      // 11: patch.Copy
-	(*Nest)(nil),      // 12: patch.Nest
-	(*Path)(nil),      // 13: patch.Path
-	(*Selector)(nil),  // 14: patch.Selector
-	(*Value)(nil),     // 15: patch.Value
-	(*Location)(nil),  // 16: patch.Location
+	(OnAbsentPath)(0), // 0: patch.OnAbsentPath
+	(OnMissing)(0),    // 1: patch.OnMissing
+	(*Patch)(nil),     // 2: patch.Patch
+	(*Delta)(nil),     // 3: patch.Delta
+	(*Entry)(nil),     // 4: patch.Entry
+	(*Targets)(nil),   // 5: patch.Targets
+	(*Container)(nil), // 6: patch.Container
+	(*Remove)(nil),    // 7: patch.Remove
+	(*Test)(nil),      // 8: patch.Test
+	(*Insert)(nil),    // 9: patch.Insert
+	(*Assign)(nil),    // 10: patch.Assign
+	(*Move)(nil),      // 11: patch.Move
+	(*Copy)(nil),      // 12: patch.Copy
+	(*Nest)(nil),      // 13: patch.Nest
+	(*Path)(nil),      // 14: patch.Path
+	(*Selector)(nil),  // 15: patch.Selector
+	(*Value)(nil),     // 16: patch.Value
+	(*Location)(nil),  // 17: patch.Location
 }
 var file_patch_patch_proto_depIdxs = []int32{
-	2,  // 0: patch.Patch.delta:type_name -> patch.Delta
-	3,  // 1: patch.Delta.entries:type_name -> patch.Entry
-	13, // 2: patch.Entry.path:type_name -> patch.Path
-	4,  // 3: patch.Entry.targets:type_name -> patch.Targets
-	5,  // 4: patch.Entry.container:type_name -> patch.Container
-	0,  // 5: patch.Entry.on_missing:type_name -> patch.OnMissing
-	6,  // 6: patch.Entry.remove:type_name -> patch.Remove
-	7,  // 7: patch.Entry.test:type_name -> patch.Test
-	8,  // 8: patch.Entry.insert:type_name -> patch.Insert
-	9,  // 9: patch.Entry.assign:type_name -> patch.Assign
-	10, // 10: patch.Entry.move:type_name -> patch.Move
-	11, // 11: patch.Entry.copy:type_name -> patch.Copy
-	12, // 12: patch.Entry.nest:type_name -> patch.Nest
-	14, // 13: patch.Targets.selectors:type_name -> patch.Selector
-	15, // 14: patch.Test.value:type_name -> patch.Value
-	15, // 15: patch.Insert.value:type_name -> patch.Value
-	15, // 16: patch.Assign.value:type_name -> patch.Value
-	16, // 17: patch.Move.from:type_name -> patch.Location
-	16, // 18: patch.Copy.from:type_name -> patch.Location
-	2,  // 19: patch.Nest.delta:type_name -> patch.Delta
-	20, // [20:20] is the sub-list for method output_type
-	20, // [20:20] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	3,  // 0: patch.Patch.delta:type_name -> patch.Delta
+	4,  // 1: patch.Delta.entries:type_name -> patch.Entry
+	14, // 2: patch.Entry.path:type_name -> patch.Path
+	5,  // 3: patch.Entry.targets:type_name -> patch.Targets
+	6,  // 4: patch.Entry.container:type_name -> patch.Container
+	1,  // 5: patch.Entry.on_missing:type_name -> patch.OnMissing
+	0,  // 6: patch.Entry.on_absent_path:type_name -> patch.OnAbsentPath
+	7,  // 7: patch.Entry.remove:type_name -> patch.Remove
+	8,  // 8: patch.Entry.test:type_name -> patch.Test
+	9,  // 9: patch.Entry.insert:type_name -> patch.Insert
+	10, // 10: patch.Entry.assign:type_name -> patch.Assign
+	11, // 11: patch.Entry.move:type_name -> patch.Move
+	12, // 12: patch.Entry.copy:type_name -> patch.Copy
+	13, // 13: patch.Entry.nest:type_name -> patch.Nest
+	15, // 14: patch.Targets.selectors:type_name -> patch.Selector
+	16, // 15: patch.Test.value:type_name -> patch.Value
+	16, // 16: patch.Insert.value:type_name -> patch.Value
+	16, // 17: patch.Assign.value:type_name -> patch.Value
+	17, // 18: patch.Move.from:type_name -> patch.Location
+	17, // 19: patch.Copy.from:type_name -> patch.Location
+	3,  // 20: patch.Nest.delta:type_name -> patch.Delta
+	21, // [21:21] is the sub-list for method output_type
+	21, // [21:21] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_patch_patch_proto_init() }
@@ -1956,7 +2073,7 @@ func file_patch_patch_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_patch_patch_proto_rawDesc), len(file_patch_patch_proto_rawDesc)),
-			NumEnums:      1,
+			NumEnums:      2,
 			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,

@@ -6,9 +6,9 @@ disagrees with the others.
 
 | Package | Target | Agrees with `patchproto` on |
 | ------- | ------ | --------------------------- |
-| [`patchproto`](../patchproto/) | `proto.Message` | 73 / 73 — it is the reference |
-| [`patchstruct`](../patchstruct/) | a hand-written Go struct | 58 / 73 |
-| [`patchjson`](../patchjson/) | schema-less JSON | 42 / 73 |
+| [`patchproto`](../patchproto/) | `proto.Message` | 83 / 83 — it is the reference |
+| [`patchstruct`](../patchstruct/) | a hand-written Go struct | 68 / 83 |
+| [`patchjson`](../patchjson/) | schema-less JSON | 50 / 83 |
 
 The numbers come from the shared corpus in [`conformance/`](../conformance/),
 which every engine runs.
@@ -71,6 +71,7 @@ The format asks questions that only some targets can answer.
 | NaN equals NaN | ✅ | ✅ | — |
 | unknown fields excluded from equality | ✅ | — | — |
 | depth bounded, and fails closed past it | ✅ | ✅ | ✅ |
+| `on_absent_path` creates only what is missing | ✅ | ✅ | ⚠️ |
 | `message_type` | ✅ | with `ExpectType` | with `ExpectType` |
 | everything else — addressing, operations, atomicity, fail-closed | ✅ | ✅ | ✅ |
 
@@ -96,7 +97,11 @@ So each engine runs the shared corpus and every disagreement must be declared
 with a cause. A new one cannot appear without someone writing it down, and a
 declared one that starts agreeing fails the test too.
 
-### `patchstruct` — 15 of 73
+The ⚠️ is `patchjson` creating a container without knowing whether it should be
+an object or an array. It makes an object, so a path that then descends by index
+fails one segment later than it would elsewhere.
+
+### `patchstruct` — 15 of 83
 
 | cause | cases |
 | ----- | ----- |
@@ -108,14 +113,15 @@ Go has no oneof, and that is the whole of the growth. A hand-written struct may
 *model* one — an interface, a tag field, a set of pointers — but the format
 cannot know which, and picking one would be guessing.
 
-### `patchjson` — 31 of 73
+### `patchjson` — 33 of 83
 
 | cause | cases |
 | ----- | ----- |
 | a oneof is declared by a schema, and a JSON document has none | 11 |
 | an empty list or map exists in protobuf and is absent in JSON — protojson omits it | 9 |
+| creating a container cannot know whether to make an object or an array | 1 |
 | a field number cannot be checked without a schema, so it is refused first | 3 |
-| "declared" is a property of a descriptor and has no JSON shadow | 2 |
+| "declared" is a property of a descriptor and has no JSON shadow | 3 |
 | there are no declared types to compare for `move`/`copy` | 2 |
 | JSON has no NaN; ProtoJSON writes it as the string `"NaN"`, which no float arm matches | 2 |
 | an object stands in for both a message and a map, and behaves like the map | 1 |

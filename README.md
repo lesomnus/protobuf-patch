@@ -43,6 +43,10 @@ mismatch is an error, never a widened, narrowed, or truncated write.
 
 **Does not generate.** There is no `Diff`; a patch is built by hand.
 
+**Never creates what you did not ask for.** A path refuses an absent container
+by default; `on_absent_path` is how an author opts in, on the wire, and it
+creates only what is missing.
+
 **Bounds what it will read.** Both places a document recurses are bounded, so a
 few kilobytes cannot cost gigabytes.
 
@@ -63,8 +67,8 @@ out, err     := patchjson.Apply(doc, p)     // a JSON document
 Each engine enforces as much of the format as its target can express and
 **refuses what it cannot check** rather than guessing. Go's static types recover
 most of what JSON loses, so `patchstruct` sits much closer to the reference than
-`patchjson` does — of the 73 conformance cases, `patchstruct` agrees on 58 and
-`patchjson` on 42. Every remaining disagreement is declared with a cause and
+`patchjson` does — of the 83 conformance cases, `patchstruct` agrees on 68 and
+`patchjson` on 50. Every remaining disagreement is declared with a cause and
 tested, so a new one cannot appear silently. See [engines.md](docs/engines.md).
 
 ## Documentation

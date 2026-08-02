@@ -322,6 +322,36 @@ asserts the target does not have it set. Subset matching is available by testing
 the fields individually, and making it the default would have meant no way to
 assert "and nothing else".
 
+### Creating a path is opt-in, and creates only what is missing
+
+**Everything else the format tolerates is recorded on the wire, and so is this.**
+
+Before `on_absent_path`, setting `m_1.m_1.s_1` on an empty message needed a
+chain of entries assigning empty messages on the way down. That worked — the
+document is atomic, so a later failure discards the containers — but the cost
+was verbosity, and the obvious shortcut is a trap: assigning a nested literal
+reaches the same place and **replaces** the container, dropping whatever the
+document did not name.
+
+So the option creates what is missing and nothing else. Three things it
+deliberately does not do:
+
+- **A list index is never created.** Growing a list shifts every index after it,
+  and `insert` with `append` is what grows one. The rule stays jagged — message
+  fields and map entries can be created, list positions cannot — because the
+  alternative is a path that silently means something different depending on
+  what it passes through.
+- **It may not be set on a `test`.** Creating a container is a mutation, and a
+  passing test would leave the target holding one the document never asked for.
+  That is the same shape as the existing rule against `on_missing` on a test:
+  an assertion must not be softened, whichever way.
+- **It does not govern a `move`/`copy` source.** Creating one would mean reading
+  from something the entry had just made empty.
+
+The builder makes the first two unrepresentable rather than merely diagnosed:
+`InOrCreate` returns a scope with no `Test` or `Exists`, and a source is a
+`Location`, which has no path policy to set.
+
 ### Extensions are refused rather than reported absent
 
 **`MessageDescriptor.Fields` never contains extensions, so an extension number

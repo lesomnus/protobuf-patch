@@ -76,9 +76,9 @@ func (l loc) identIn(c cont) any {
 
 // navigate walks p from c. A path never creates anything and never tolerates a
 // miss, whatever on_missing says.
-func navigate(c cont, p *patchpb.Path, at patch.At) (cont, error) {
+func navigate(c cont, p *patchpb.Path, create bool, at patch.At) (cont, error) {
 	for i, k := range p.GetSegments() {
-		next, err := descend(c, k, at.Index("segments", i))
+		next, err := descend(c, k, create, at.Index("segments", i))
 		if err != nil {
 			return cont{}, err
 		}
@@ -87,14 +87,20 @@ func navigate(c cont, p *patchpb.Path, at patch.At) (cont, error) {
 	return c, nil
 }
 
-func descend(c cont, k *patchpb.Key, at patch.At) (cont, error) {
+func descend(c cont, k *patchpb.Key, create bool, at patch.At) (cont, error) {
 	l, err := resolveKey(c, k, at)
 	if err != nil {
 		return cont{}, err
 	}
-	if l.noSlot || l.emptySlot {
+	// noSlot is an array index outside the array, which cannot be created
+	// whatever the document asks: growing an array shifts every index after
+	// it. emptySlot is an absent object member, which can.
+	if l.noSlot || (l.emptySlot && !create) {
 		return cont{}, patch.Errf(patch.CodePathNotReached, at,
-			"nothing at that position in the %s; a path never creates one", c.describe())
+			"nothing at that position in the %s; set on_absent_path to create it deliberately", c.describe())
+	}
+	if l.emptySlot {
+		c.obj[l.key] = map[string]any{}
 	}
 
 	var child any

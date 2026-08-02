@@ -129,8 +129,9 @@ A path is always relative to the container the enclosing delta is applied to;
 for the outermost delta that is the root message. It only descends, so a nested
 delta cannot escape the container `nest` handed it.
 
-Every container along the way must already exist — a patch never auto-creates
-one, and `on_missing` never applies to a path. "Exist" means presence, not
+Every container along the way must already exist. `on_missing` never applies to
+a path; [`on_absent_path`](#paths-do-not-create-unless-asked-on-the-wire) is
+what governs it, and only for what can be created. "Exist" means presence, not
 contents: a singular message field must be set, while a repeated or map field
 has no presence in protobuf and therefore always exists as a container, empty or
 not.
@@ -421,6 +422,7 @@ treated as a no-op:
 - an arm not legal for the container or field it lands on
 - `oneof_member` against a non-message, or naming a synthetic oneof
 - `every_entry` against a non-map
+- `on_absent_path` set on a `test`, or an `OnMissing`/`OnAbsentPath` value not declared
 - a document nesting deeper than the reader will follow
 - a `MapKey` outside the declared key type's range
 - a `Value.e` a closed enum does not declare
@@ -433,6 +435,44 @@ an unrecognized oneof arm as "not set", so the unknown-field set is the only
 thing separating "the producer omitted it" from "the producer used an arm from a
 newer revision". A reader that skips the scan will silently apply a subset of a
 document it does not understand.
+
+### Paths do not create, unless asked on the wire
+
+A path never tolerates a miss and by default never creates anything: descending
+into an unset message field is `path does not reach a container`.
+
+`on_absent_path: ON_ABSENT_PATH_CREATE` is how an author asks for creation, and
+like `on_missing` it is **recorded in the document** rather than chosen by the
+reader. It creates what is missing and **only** what is missing:
+
+| | |
+| --- | --- |
+| an unset singular message field | set to an empty message |
+| a map key with no entry, message-valued | an empty entry is added |
+| anything already there | left exactly as it is |
+| a list index outside `[0, len)` | still an **error** |
+| a field the message does not declare | still an error |
+| a segment naming a scalar | still an error |
+
+A list index cannot be created because growing a list shifts every index after
+it; `insert` with `append` is what grows one.
+
+The "only what is missing" part is the whole difference from assigning a nested
+literal, which reaches the same place and **replaces** the container:
+
+```
+{m_1: {s_2: "keep me"}}   + create + assign m_1.m_1.s_1
+  → {m_1: {m_1: {s_1: "deep"}, s_2: "keep me"}}
+
+{m_1: {s_2: "keep me"}}   + assign m_1 = {m_1: {s_1: "deep"}}
+  → {m_1: {m_1: {s_1: "deep"}}}          ← s_2 is gone
+```
+
+Two things it deliberately does not reach. It **may not be set on a `test`**,
+because creating a container is a mutation and a passing test would leave the
+target holding one the document never asked for. And it does not govern a
+`move`/`copy` **source**: creating one would mean reading from something the
+entry had just made empty.
 
 ### Extensions are refused, not reported absent
 

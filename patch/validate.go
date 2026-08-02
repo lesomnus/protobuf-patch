@@ -166,6 +166,16 @@ func validateEntry(e *patchpb.Entry, at At) error {
 			"a test reads a missing target rather than skipping it; use exists=false to assert absence")
 	}
 
+	switch oap := e.GetOnAbsentPath(); oap {
+	case patchpb.OnAbsentPath_ON_ABSENT_PATH_UNSPECIFIED, patchpb.OnAbsentPath_ON_ABSENT_PATH_CREATE:
+	default:
+		return Errf(CodeUnrecognizedEnum, at.Sub("on_absent_path"), "OnAbsentPath(%d)", int32(oap))
+	}
+	if kind == patchpb.Entry_Test_case && e.GetOnAbsentPath() != patchpb.OnAbsentPath_ON_ABSENT_PATH_UNSPECIFIED {
+		return Errf(CodeTestNotStrict, at.Sub("on_absent_path"),
+			"creating a container is a mutation, and a test must not mutate")
+	}
+
 	return validateKindPayload(e, kind, at)
 }
 

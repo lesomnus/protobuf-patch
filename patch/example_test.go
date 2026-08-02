@@ -550,3 +550,50 @@ func ExampleLimits() {
 	// document is nested too deeply
 	// with a raised bound: true
 }
+
+// InOrCreate creates the containers along the path that are missing, and only
+// those — which is what separates it from assigning a nested literal.
+func ExampleTargetScope_InOrCreate() {
+	deep := patch.MustNew(messageType,
+		patch.Target(patch.Name("s_1")).
+			InOrCreate(patch.Name("m_1"), patch.Name("m_1")).
+			Assign(patch.Str("deep")),
+	)
+
+	// Nothing there at all: both levels get made.
+	out, err := patchproto.Apply(&sample.Value{}, deep)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("from empty:", out.GetM_1().GetM_1().GetS_1())
+
+	// Something already there: it survives.
+	in := &sample.Value{}
+	existing := &sample.Value{}
+	existing.SetS_2("please keep me")
+	in.SetM_1(existing)
+
+	out, err = patchproto.Apply(in, deep)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("kept:", out.GetM_1().GetS_2())
+
+	// Assigning a nested literal reaches the same place and drops it.
+	out, err = patchproto.Apply(in, patch.MustNew(messageType,
+		patch.Target(patch.Name("m_1")).Assign(patch.Msg(
+			patch.F(patch.Name("m_1"), patch.Msg(
+				patch.F(patch.Name("s_1"), patch.Str("deep")),
+			)),
+		)),
+	))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("literal kept: %q\n", out.GetM_1().GetS_2())
+
+	// Output:
+	// from empty: deep
+	// kept: please keep me
+	// literal kept: ""
+}

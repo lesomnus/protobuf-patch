@@ -95,12 +95,17 @@ func (l loc) ident() any {
 
 // navigate walks p from c, returning the container it reaches.
 //
-// A path never creates anything and never tolerates a miss: a vacant key or an
-// unset singular message field along the way is CodePathNotReached, regardless
-// of on_missing.
-func navigate(c cont, p *patchpb.Path, at patch.At) (cont, error) {
+// A path never tolerates a miss — on_missing does not reach it — and by
+// default never creates anything either: a vacant key or an unset singular
+// message field along the way is CodePathNotReached.
+//
+// create is Entry.on_absent_path = CREATE, which is the author's recorded
+// decision to have the missing containers made. It never applies to a
+// Location: creating a source would mean reading from something the entry had
+// just made empty.
+func navigate(c cont, p *patchpb.Path, create bool, at patch.At) (cont, error) {
 	for i, k := range p.GetSegments() {
-		next, err := descend(c, k, at.Index("segments", i))
+		next, err := descend(c, k, create, at.Index("segments", i))
 		if err != nil {
 			return cont{}, err
 		}
@@ -109,18 +114,18 @@ func navigate(c cont, p *patchpb.Path, at patch.At) (cont, error) {
 	return c, nil
 }
 
-func descend(c cont, k *patchpb.Key, at patch.At) (cont, error) {
+func descend(c cont, k *patchpb.Key, create bool, at patch.At) (cont, error) {
 	switch {
 	case c.isMsg():
-		return descendMessage(c.msg, k, at)
+		return descendMessage(c.msg, k, create, at)
 	case c.isList():
 		return descendList(c.list, c.fd, k, at)
 	default:
-		return descendMap(c.mp, c.fd, k, at)
+		return descendMap(c.mp, c.fd, k, create, at)
 	}
 }
 
-func descendMessage(m protoreflect.Message, k *patchpb.Key, at patch.At) (cont, error) {
+func descendMessage(m protoreflect.Message, k *patchpb.Key, create bool, at patch.At) (cont, error) {
 	if k.WhichKind() != patchpb.Key_Field_case {
 		return cont{}, patch.Errf(patch.CodePathNotReached, at,
 			"%s is a message; a path into it takes a field", m.Descriptor().FullName())
@@ -144,10 +149,13 @@ func descendMessage(m protoreflect.Message, k *patchpb.Key, at patch.At) (cont, 
 	case fd.Kind() == protoreflect.MessageKind, fd.Kind() == protoreflect.GroupKind:
 		// A singular message field does have presence, and descending into an
 		// unset one would have to create it.
-		if !m.Has(fd) {
+		if !m.Has(fd) && !create {
 			return cont{}, patch.Errf(patch.CodePathNotReached, at,
-				"%s is not set; a path never creates a container", fd.FullName())
+				"%s is not set; set on_absent_path to create it deliberately", fd.FullName())
 		}
+		// Mutable materializes an unset message field, which under create is
+		// exactly the intent, and is a no-op when the field is already set —
+		// so nothing that is already there is disturbed.
 		return msgCont(m.Mutable(fd).Message()), nil
 	default:
 		return cont{}, patch.Errf(patch.CodePathNotReached, at,
@@ -172,7 +180,7 @@ func descendList(l protoreflect.List, fd protoreflect.FieldDescriptor, k *patchp
 	return msgCont(l.Get(i).Message()), nil
 }
 
-func descendMap(mp protoreflect.Map, fd protoreflect.FieldDescriptor, k *patchpb.Key, at patch.At) (cont, error) {
+func descendMap(mp protoreflect.Map, fd protoreflect.FieldDescriptor, k *patchpb.Key, create bool, at patch.At) (cont, error) {
 	if k.WhichKind() != patchpb.Key_MapKey_case {
 		return cont{}, patch.Errf(patch.CodePathNotReached, at,
 			"%s is a map; a path into it takes a map key", fd.FullName())
@@ -181,13 +189,16 @@ func descendMap(mp protoreflect.Map, fd protoreflect.FieldDescriptor, k *patchpb
 	if err != nil {
 		return cont{}, err
 	}
-	if !mp.Has(mk) {
+	if !mp.Has(mk) && !create {
 		return cont{}, patch.Errf(patch.CodePathNotReached, at,
-			"%s has no such key; a path never creates one", fd.FullName())
+			"%s has no such key; set on_absent_path to create it deliberately", fd.FullName())
 	}
 	if fd.MapValue().Kind() != protoreflect.MessageKind && fd.MapValue().Kind() != protoreflect.GroupKind {
 		return cont{}, patch.Errf(patch.CodePathNotReached, at,
 			"values of %s are %v, not containers", fd.FullName(), fd.MapValue().Kind())
+	}
+	if !mp.Has(mk) {
+		mp.Set(mk, mp.NewValue())
 	}
 	return msgCont(mp.Get(mk).Message()), nil
 }
