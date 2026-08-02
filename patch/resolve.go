@@ -20,6 +20,9 @@ import (
 // the resolved field. Disagreement is CodeFieldConflict, NOT vacancy: it means
 // the Patch was authored against a different schema, and skipping that would
 // defeat the only integrity check the format has.
+//
+// A number in one of md's extension ranges is CodeExtensionField, also not
+// vacancy — see the comment on that code.
 func ResolveField(md protoreflect.MessageDescriptor, f *patchpb.Field, at At) (protoreflect.FieldDescriptor, bool, error) {
 	if err := validateField(f, at); err != nil {
 		return nil, false, err
@@ -36,6 +39,15 @@ func ResolveField(md protoreflect.MessageDescriptor, f *patchpb.Field, at At) (p
 		fd = fields.ByJSONName(f.GetJsonName())
 	}
 	if fd == nil {
+		// MessageDescriptor.Fields never contains extensions, so an extension
+		// number lands here looking exactly like a field the message does not
+		// declare. Reporting it as vacancy would be a lie about data that is
+		// really there, so it is separated out before vacancy is returned.
+		if n := protoreflect.FieldNumber(f.GetNumber()); f.HasNumber() && md.ExtensionRanges().Has(n) {
+			return nil, false, Errf(CodeExtensionField, at,
+				"%d is in an extension range of %s; the format cannot address extensions, and will not report one as absent",
+				n, md.FullName())
+		}
 		return nil, true, nil
 	}
 

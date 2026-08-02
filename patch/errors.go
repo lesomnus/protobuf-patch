@@ -95,6 +95,13 @@ const (
 	// against a different schema, and must never be skipped.
 	CodeFieldConflict
 
+	// CodeExtensionField is a Field.number falling in one of the target
+	// message's extension ranges. Extensions are not addressable, and this is
+	// NOT vacancy: an extension is data the message really holds, so calling it
+	// a missing target would let test.exists=false succeed about a value that
+	// is present, and let on_missing skip a patch that was meant to change it.
+	CodeExtensionField
+
 	// CodeMapKeyOutOfRange is a MapKey whose arm is legal for the map but
 	// whose value falls outside the declared key type's range.
 	CodeMapKeyOutOfRange
@@ -158,6 +165,7 @@ var codeNames = map[Code]string{
 	CodeReaderRevisionTooOld: "reader revision too old",
 	CodeIllegalArm:           "illegal arm for target",
 	CodeFieldConflict:        "field identifiers disagree",
+	CodeExtensionField:       "extension field is not addressable",
 	CodeMapKeyOutOfRange:     "map key out of range",
 	CodeUndeclaredEnumValue:  "undeclared enum value",
 	CodeTypeMismatch:         "type mismatch",

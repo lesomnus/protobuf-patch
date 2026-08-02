@@ -122,6 +122,9 @@ func (x OnMissing) Number() protoreflect.EnumNumber {
 //     destructive operation available.)
 //   - Two selectors in one entry that resolve to the same location.
 //   - A `Field` with no identifier set, or whose set identifiers disagree.
+//   - A `Field.number` in an extension range of the message it is resolved
+//     against. Extensions are not addressable and MUST NOT be reported as
+//     absent (see `Field`).
 //   - A selector, key, or value arm that is not legal for the container or
 //     field it is applied to (see the tables on `Key`, `MapKey`, and `Value`).
 //   - A `MapKey` value outside the declared key type's range.

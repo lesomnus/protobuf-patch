@@ -1,0 +1,26 @@
+edition = "2023";
+
+package sample;
+
+// A message with an extension range, so that the rule "extensions are not
+// addressable, and are never reported as absent" has something real to be
+// tested against.
+//
+// The rule exists because MessageDescriptor.Fields never contains extensions:
+// without the check, an extension number looks exactly like a field the
+// message does not declare, and the format would answer `exists = false` about
+// a value that is right there.
+
+option features.field_presence = EXPLICIT;
+
+option go_package = "github.com/lesomnus/protobuf-patch/internal/sample";
+
+message Extendable {
+  string s_1 = 1;
+
+  extensions 100 to 200;
+}
+
+extend Extendable {
+  string ext_s = 100;
+}

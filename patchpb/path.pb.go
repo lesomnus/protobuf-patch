@@ -309,6 +309,18 @@ func (*key_MapKey) isKey_Kind() {}
 // If no identifier resolves to a declared field, the Key names NO SLOT (see
 // `Key`), which every operation treats as a missing target.
 //
+// EXTENSIONS ARE NOT ADDRESSABLE, and are not vacancy either. A `number` that
+// falls in one of the target message's extension ranges is an ERROR, never
+// subject to `Entry.on_missing`. An extension is data the message really
+// holds: calling it a missing target would let `test.exists = false` succeed
+// about a value that is present, and would let `on_missing` silently skip an
+// operation that was meant to change it. Both are exactly the outcomes this
+// format exists to prevent, so it refuses rather than answers wrongly. An
+// extension the reader has no descriptor for arrives as an unknown field on
+// the target instead, and the preservation rule in `patch.Patch` already
+// covers it. Should a revision make extensions addressable, it will do so with
+// its own arm rather than by reinterpreting `number`.
+//
 // A Field with no identifier set is an error. A set-but-empty `name` or
 // `json_name` is an error, since neither is a legal protobuf field name.
 type Field struct {
