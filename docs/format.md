@@ -261,8 +261,8 @@ assign Z, targets [-1]             => [a, b, Z]
 
 ```proto
 message Location {
-  oneof origin { Path path = 1; SameContainer same_container = 3; }
-  Key key = 2;
+  oneof origin { Path path = 1; SameContainer same_container = 2; }
+  Key key = 3;
 }
 ```
 

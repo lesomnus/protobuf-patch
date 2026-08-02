@@ -366,25 +366,29 @@ message Entry {
   // It may not be set on a `test`. Creating a container is a mutation, and a
   // `test` MUST NOT mutate — a passing test would otherwise leave the target
   // holding a container the document never asked for.
-  //
-  // Field 16 rather than one of the reserved single-byte tags: those are held
-  // for future operations, which every entry carries, while this is a policy
-  // most entries leave unset.
-  OnAbsentPath on_absent_path = 16;
+  OnAbsentPath on_absent_path = 5;
 
   // Exactly one operation. Required.
   oneof kind {
-    Remove remove = 5;
-    Test   test   = 6;
-    Insert insert = 7;
-    Assign assign = 8;
-    Move   move   = 9;
-    Copy   copy   = 10;
-    Nest   nest   = 11;
+    Remove remove = 6;
+    Test   test   = 7;
+    Insert insert = 8;
+    Assign assign = 9;
+    Move   move   = 10;
+    Copy   copy   = 11;
+    Nest   nest   = 12;
   }
 
-  // Held for future operations, so that a new kind keeps a single-byte tag.
-  reserved 12 to 15;
+  // Held so that whatever Entry gains next — an operation or another policy —
+  // still fits in a single-byte tag. Numbers 1 through 15 encode their tag in
+  // one byte and 16 upward take two, and an Entry is the message this document
+  // repeats most.
+  //
+  // This range EXISTS TO BE SPENT. `on_absent_path` was first given field 16
+  // on the theory that the reserve belonged to operations alone; that made the
+  // reservation unspendable, which is hoarding rather than planning. A reserve
+  // nobody may draw on protects nothing.
+  reserved 13 to 15;
 }
 
 // Targets lists the locations an operation applies to. `selectors` must not be
@@ -446,7 +450,8 @@ message Test {
     bool exists = 2;
   }
 
-  // Held for future assertion forms.
+  // Held for whatever Test gains next, on the same terms as `Entry`: a
+  // reserve is there to be spent, not hoarded.
   reserved 3 to 15;
 }
 

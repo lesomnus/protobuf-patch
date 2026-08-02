@@ -329,12 +329,12 @@ message Location {
     Path path = 1;
 
     // The container reached by `Entry.path`, i.e. where the targets live.
-    SameContainer same_container = 3;
+    SameContainer same_container = 2;
   }
 
   // The source position within that container. Required; an unset `key` is an
   // error, and a `key` that reaches nothing is an error (never skipped).
-  Key key = 2;
+  Key key = 3;
 }
 
 // SameContainer selects the container reached by `Entry.path`. It carries no

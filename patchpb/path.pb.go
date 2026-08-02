@@ -1573,7 +1573,7 @@ func (b0 Append_builder) Build() *Append {
 type Location struct {
 	state             protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Origin isLocation_Origin      `protobuf_oneof:"origin"`
-	xxx_hidden_Key    *Key                   `protobuf:"bytes,2,opt,name=key"`
+	xxx_hidden_Key    *Key                   `protobuf:"bytes,3,opt,name=key"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -1700,7 +1700,7 @@ func (x *Location) ClearKey() {
 
 const Location_Origin_not_set_case case_Location_Origin = 0
 const Location_Path_case case_Location_Origin = 1
-const Location_SameContainer_case case_Location_Origin = 3
+const Location_SameContainer_case case_Location_Origin = 2
 
 func (x *Location) WhichOrigin() case_Location_Origin {
 	if x == nil {
@@ -1770,7 +1770,7 @@ type location_Path struct {
 
 type location_SameContainer struct {
 	// The container reached by `Entry.path`, i.e. where the targets live.
-	SameContainer *SameContainer `protobuf:"bytes,3,opt,name=same_container,json=sameContainer,oneof"`
+	SameContainer *SameContainer `protobuf:"bytes,2,opt,name=same_container,json=sameContainer,oneof"`
 }
 
 func (*location_Path) isLocation_Origin() {}
@@ -1864,8 +1864,8 @@ const file_patch_path_proto_rawDesc = "" +
 	"\x06Append\"\x94\x01\n" +
 	"\bLocation\x12!\n" +
 	"\x04path\x18\x01 \x01(\v2\v.patch.PathH\x00R\x04path\x12=\n" +
-	"\x0esame_container\x18\x03 \x01(\v2\x14.patch.SameContainerH\x00R\rsameContainer\x12\x1c\n" +
-	"\x03key\x18\x02 \x01(\v2\n" +
+	"\x0esame_container\x18\x02 \x01(\v2\x14.patch.SameContainerH\x00R\rsameContainer\x12\x1c\n" +
+	"\x03key\x18\x03 \x01(\v2\n" +
 	".patch.KeyR\x03keyB\b\n" +
 	"\x06origin\"\x0f\n" +
 	"\rSameContainerB1Z*github.com/lesomnus/protobuf-patch/patchpb\x92\x03\x02\b\x01b\beditionsp\xe8\a"

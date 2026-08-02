@@ -636,7 +636,7 @@ type Entry struct {
 	xxx_hidden_Path         *Path                  `protobuf:"bytes,1,opt,name=path"`
 	xxx_hidden_Scope        isEntry_Scope          `protobuf_oneof:"scope"`
 	xxx_hidden_OnMissing    OnMissing              `protobuf:"varint,4,opt,name=on_missing,json=onMissing,enum=patch.OnMissing"`
-	xxx_hidden_OnAbsentPath OnAbsentPath           `protobuf:"varint,16,opt,name=on_absent_path,json=onAbsentPath,enum=patch.OnAbsentPath"`
+	xxx_hidden_OnAbsentPath OnAbsentPath           `protobuf:"varint,5,opt,name=on_absent_path,json=onAbsentPath,enum=patch.OnAbsentPath"`
 	xxx_hidden_Kind         isEntry_Kind           `protobuf_oneof:"kind"`
 	XXX_raceDetectHookData  protoimpl.RaceDetectHookData
 	XXX_presence            [1]uint32
@@ -1063,13 +1063,13 @@ func (x *Entry) WhichScope() case_Entry_Scope {
 }
 
 const Entry_Kind_not_set_case case_Entry_Kind = 0
-const Entry_Remove_case case_Entry_Kind = 5
-const Entry_Test_case case_Entry_Kind = 6
-const Entry_Insert_case case_Entry_Kind = 7
-const Entry_Assign_case case_Entry_Kind = 8
-const Entry_Move_case case_Entry_Kind = 9
-const Entry_Copy_case case_Entry_Kind = 10
-const Entry_Nest_case case_Entry_Kind = 11
+const Entry_Remove_case case_Entry_Kind = 6
+const Entry_Test_case case_Entry_Kind = 7
+const Entry_Insert_case case_Entry_Kind = 8
+const Entry_Assign_case case_Entry_Kind = 9
+const Entry_Move_case case_Entry_Kind = 10
+const Entry_Copy_case case_Entry_Kind = 11
+const Entry_Nest_case case_Entry_Kind = 12
 
 func (x *Entry) WhichKind() case_Entry_Kind {
 	if x == nil {
@@ -1129,10 +1129,6 @@ type Entry_builder struct {
 	// It may not be set on a `test`. Creating a container is a mutation, and a
 	// `test` MUST NOT mutate — a passing test would otherwise leave the target
 	// holding a container the document never asked for.
-	//
-	// Field 16 rather than one of the reserved single-byte tags: those are held
-	// for future operations, which every entry carries, while this is a policy
-	// most entries leave unset.
 	OnAbsentPath *OnAbsentPath
 	// Exactly one operation. Required.
 
@@ -1233,31 +1229,31 @@ type isEntry_Kind interface {
 }
 
 type entry_Remove struct {
-	Remove *Remove `protobuf:"bytes,5,opt,name=remove,oneof"`
+	Remove *Remove `protobuf:"bytes,6,opt,name=remove,oneof"`
 }
 
 type entry_Test struct {
-	Test *Test `protobuf:"bytes,6,opt,name=test,oneof"`
+	Test *Test `protobuf:"bytes,7,opt,name=test,oneof"`
 }
 
 type entry_Insert struct {
-	Insert *Insert `protobuf:"bytes,7,opt,name=insert,oneof"`
+	Insert *Insert `protobuf:"bytes,8,opt,name=insert,oneof"`
 }
 
 type entry_Assign struct {
-	Assign *Assign `protobuf:"bytes,8,opt,name=assign,oneof"`
+	Assign *Assign `protobuf:"bytes,9,opt,name=assign,oneof"`
 }
 
 type entry_Move struct {
-	Move *Move `protobuf:"bytes,9,opt,name=move,oneof"`
+	Move *Move `protobuf:"bytes,10,opt,name=move,oneof"`
 }
 
 type entry_Copy struct {
-	Copy *Copy `protobuf:"bytes,10,opt,name=copy,oneof"`
+	Copy *Copy `protobuf:"bytes,11,opt,name=copy,oneof"`
 }
 
 type entry_Nest struct {
-	Nest *Nest `protobuf:"bytes,11,opt,name=nest,oneof"`
+	Nest *Nest `protobuf:"bytes,12,opt,name=nest,oneof"`
 }
 
 func (*entry_Remove) isEntry_Kind() {}
@@ -1959,17 +1955,17 @@ const file_patch_patch_proto_rawDesc = "" +
 	"\tcontainer\x18\x03 \x01(\v2\x10.patch.ContainerH\x00R\tcontainer\x12/\n" +
 	"\n" +
 	"on_missing\x18\x04 \x01(\x0e2\x10.patch.OnMissingR\tonMissing\x129\n" +
-	"\x0eon_absent_path\x18\x10 \x01(\x0e2\x13.patch.OnAbsentPathR\fonAbsentPath\x12'\n" +
-	"\x06remove\x18\x05 \x01(\v2\r.patch.RemoveH\x01R\x06remove\x12!\n" +
-	"\x04test\x18\x06 \x01(\v2\v.patch.TestH\x01R\x04test\x12'\n" +
-	"\x06insert\x18\a \x01(\v2\r.patch.InsertH\x01R\x06insert\x12'\n" +
-	"\x06assign\x18\b \x01(\v2\r.patch.AssignH\x01R\x06assign\x12!\n" +
-	"\x04move\x18\t \x01(\v2\v.patch.MoveH\x01R\x04move\x12!\n" +
-	"\x04copy\x18\n" +
-	" \x01(\v2\v.patch.CopyH\x01R\x04copy\x12!\n" +
-	"\x04nest\x18\v \x01(\v2\v.patch.NestH\x01R\x04nestB\a\n" +
+	"\x0eon_absent_path\x18\x05 \x01(\x0e2\x13.patch.OnAbsentPathR\fonAbsentPath\x12'\n" +
+	"\x06remove\x18\x06 \x01(\v2\r.patch.RemoveH\x01R\x06remove\x12!\n" +
+	"\x04test\x18\a \x01(\v2\v.patch.TestH\x01R\x04test\x12'\n" +
+	"\x06insert\x18\b \x01(\v2\r.patch.InsertH\x01R\x06insert\x12'\n" +
+	"\x06assign\x18\t \x01(\v2\r.patch.AssignH\x01R\x06assign\x12!\n" +
+	"\x04move\x18\n" +
+	" \x01(\v2\v.patch.MoveH\x01R\x04move\x12!\n" +
+	"\x04copy\x18\v \x01(\v2\v.patch.CopyH\x01R\x04copy\x12!\n" +
+	"\x04nest\x18\f \x01(\v2\v.patch.NestH\x01R\x04nestB\a\n" +
 	"\x05scopeB\x06\n" +
-	"\x04kindJ\x04\b\f\x10\x10\"8\n" +
+	"\x04kindJ\x04\b\r\x10\x10\"8\n" +
 	"\aTargets\x12-\n" +
 	"\tselectors\x18\x01 \x03(\v2\x0f.patch.SelectorR\tselectors\"\v\n" +
 	"\tContainer\"\b\n" +

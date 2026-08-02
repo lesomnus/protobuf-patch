@@ -322,6 +322,25 @@ asserts the target does not have it set. Subset matching is available by testing
 the fields individually, and making it the default would have meant no way to
 assert "and nothing else".
 
+### A reserved range exists to be spent
+
+**Numbers 1–15 encode their tag in one byte; 16 and up take two.** `Entry` is
+the message a document repeats most, so its reserve holds the remaining
+single-byte tags.
+
+The first version of `on_absent_path` was given field 16, on the reasoning that
+`Entry`'s reserve was held for *operations* — which every entry carries — while
+a policy field is set by few. That reasoning is not wrong about the byte, and it
+is wrong about the reserve: a range no one may draw on protects nothing. Four
+spare operation slots was more than any plausible future needed, and refusing to
+spend one meant the reservation was hoarding rather than planning.
+
+So `on_absent_path` sits at 5, next to `on_missing`, the operations moved to
+6–12, and 13–15 remain — for whatever `Entry` gains next, operation or policy.
+
+Within 1–15 the ordering costs nothing, so the fields are laid out in the order
+the schema explains them: **path → scope → policy → kind**.
+
 ### Creating a path is opt-in, and creates only what is missing
 
 **Everything else the format tolerates is recorded on the wire, and so is this.**
