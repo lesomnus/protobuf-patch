@@ -1,0 +1,355 @@
+edition = "2023";
+
+package patch;
+
+import "patch/path.proto";
+import "patch/value.proto";
+
+option features.field_presence = EXPLICIT;
+
+// Pinned for the same reason as `field_presence`: an `OnMissing` value this
+// reader does not recognize must be visible to it, not silently defaulted.
+option features.enum_type = OPEN;
+
+option go_package = "github.com/lesomnus/protobuf-patch/patchpb";
+
+// Patch is a self-identifying patch DOCUMENT: the unit that is stored,
+// transmitted, and applied.
+//
+// A `Delta` on its own is a FRAGMENT — its addressing is relative to whichever
+// container it is applied to, so it does not carry enough information to be
+// interpreted alone. Only a Patch names its target and its requirements. Store
+// and transmit Patches, not bare Deltas.
+//
+// ============================ FAILURE CONTRACT ============================
+//
+// Everything below is normative. The governing principle is that an
+// implementation must never silently do less than the document asks.
+//
+// ATOMICITY. A Patch applies entirely or not at all. Full pre-validation is
+// NOT sufficient — an entry's legality can depend on state that earlier
+// entries produce — so an implementation MUST apply to a private copy and
+// publish it only on success. If any entry fails, the target MUST be
+// observably unchanged. There is no partial application and no "best effort"
+// mode. An applier that mutates a caller-owned message in place cannot honor
+// this contract and MUST NOT be offered as the primary interface.
+//
+// UNKNOWN FIELDS ON THE TARGET. Fields present on the target's wire form but
+// not declared by its descriptor are not addressable by any `Key`, and are not
+// part of the container for `remove` or `assign` at container scope: they MUST
+// be preserved unchanged. A Patch never discards data it did not name.
+//
+// FAIL CLOSED. Every one of the following is an ERROR that aborts the whole
+// Patch. None may be skipped, defaulted, or treated as a no-op:
+//
+//   - `message_type` does not name the target message.
+//   - `min_reader_revision` exceeds the revision this reader implements.
+//   - An unrecognized `oneof` arm anywhere in the document — in `Entry.kind`,
+//     `Entry.scope`, `Selector.kind`, `Key.kind`, `MapKey.kind`, `Value.kind`,
+//     `Test.want`, or `Location.origin`. A reader that does not understand an
+//     operation MUST refuse the document rather than apply the subset it
+//     understands.
+//   - Any field number this reader does not recognize, at any depth in the
+//     document — including inside `Append`, `Container`, `SameContainer`,
+//     `Remove`, `Entry`, and `Patch` itself. A reader MUST inspect the
+//     unknown-field set of every decoded message and refuse the document; it
+//     MUST NOT merely ignore unknown fields. A Patch therefore MUST NOT be
+//     carried over a transport that discards them (e.g. ProtoJSON with
+//     DiscardUnknown).
+//   - An `OnMissing` value not declared in this file.
+//   - An unset `oneof` where one is required: `Entry.scope`, `Entry.kind`,
+//     `Key.kind`, `MapKey.kind`, `Selector.kind`, `Value.kind`, `Test.want`,
+//     `Location.origin`.
+//   - An unset required field: `FieldValue.key`, `FieldValue.value`,
+//     `MapEntry.key`, `MapEntry.value`, `Location.key`, `Patch.delta`.
+//   - `Targets.selectors` is empty, or `Delta.entries` is empty. (Address a
+//     container explicitly with `Entry.container` — a producer that computed
+//     zero targets has a bug, and must not silently be handed the most
+//     destructive operation available.)
+//   - Two selectors in one entry that resolve to the same location.
+//   - A `Field` with no identifier set, or whose set identifiers disagree.
+//   - A selector, key, or value arm that is not legal for the container or
+//     field it is applied to (see the tables on `Key`, `MapKey`, and `Value`).
+//   - A `MapKey` value outside the declared key type's range.
+//   - A `Value.e` that the target's CLOSED enum does not declare.
+//   - `Entry.path` that does not reach an existing container: descending into
+//     an unset message, list, or map, or through a vacant `Key`.
+//     `Entry.on_missing` never applies to `Entry.path`.
+//   - A `test` that does not hold.
+//   - A `test` entry whose selectors resolve to zero locations, or whose
+//     `on_missing` is set to anything but the default. A `test` must never be
+//     able to pass vacuously.
+//   - A `move`/`copy` whose `Location` is vacant or does not resolve, or whose
+//     source and targets differ in kind or in declared type.
+//
+// The ONLY tolerated failure is a VACANT target (see `Key`), and only in
+// `Entry.targets`, only for kinds other than `test`, and only when the author
+// opted in on the wire via `Entry.on_missing`. Tolerance is always a recorded
+// decision, never a reader's default.
+//
+// ==========================================================================
+message Patch {
+  // Fully-qualified name of the message this Patch was authored against, e.g.
+  // "example.v1.User". Required. An applier MUST reject a Patch whose
+  // `message_type` does not match the message it is being applied to.
+  //
+  // This is what lets a stored Patch — which may outlive the schema it was
+  // written against — be validated, logged, and routed without the target
+  // descriptor in hand.
+  string message_type = 1;
+
+  // The lowest revision of this schema a reader must implement in order to
+  // apply the document correctly. 0 means "patch.proto as first published".
+  //
+  // Unrecognized arms and unknown fields are already hard errors, so this
+  // exists for the other kind of change: a revision that alters the MEANING of
+  // a construct already defined here. Such a revision increments this number,
+  // and every producer relying on the new meaning MUST set it.
+  //
+  // A reader MUST reject a Patch whose value exceeds the revision it
+  // implements. A monotone integer is used rather than a feature-string list
+  // so that there is no registry to maintain and no way to spell a capability
+  // two ways; the cost is that a revision locks out older readers for every
+  // document, not only those using the changed construct.
+  uint32 min_reader_revision = 2;
+
+  // The operations, applied to the root message. Required; an unset or empty
+  // `delta` is an error.
+  Delta delta = 3;
+}
+
+// Delta is an ordered sequence of operations applied to ONE container.
+//
+// Order is significant: entries are applied in sequence, and each observes the
+// effects of those before it.
+//
+// A Delta is context-dependent — a `Key` inside it names a field, an index, or
+// a map key depending on the container the Delta is applied to. It is
+// therefore a fragment, not a document; see `Patch`.
+message Delta {
+  // Required; an empty Delta is an error. (A no-op document is expressible as
+  // a `test` that holds, which says so explicitly.)
+  repeated Entry entries = 1;
+}
+
+// Entry is one operation.
+//
+// It reads as three parts:
+//
+//	path   — navigate INTO a container  (optional; empty = this Delta's container)
+//	scope  — WHAT in that container     (required: targets, or the container itself)
+//	kind   — the operation              (required: exactly one)
+//
+// ======================= TARGET RESOLUTION =======================
+//
+// All selectors resolve against the container state as it was BEFORE the entry
+// began. `targets` is an unordered SET: the result does not depend on the
+// order the selectors appear in, and two selectors resolving to the same
+// location are an error. This holds for every kind, including `insert` and
+// `move`.
+//
+// Worked examples on the list [a, b, c]:
+//
+//	remove, targets [0, 2]                  => [b]
+//	insert Z, targets [key 0, key 2]        => [Z, a, b, Z, c]
+//	insert Z, targets [append]              => [a, b, c, Z]
+//	assign Z, targets [-1]                  => [a, b, Z]
+//	remove, targets [-1]                    => [a, b]
+//
+// Note that -1 means "the last element" for EVERY kind; appending has its own
+// selector rather than overloading a negative index.
+//
+// VACANCY is a property of the target, not of the kind: a vacant target (see
+// `Key`) is governed by `on_missing` whatever `Entry.kind` is — except `test`,
+// which READS vacancy instead of being governed by it.
+//
+// ======================= OPERATION SEMANTICS =====================
+//
+// Each kind is defined for all four scopes. "container" is the container
+// reached by `path`, addressed via `Entry.container`.
+//
+// remove — delete the target.
+//	message field  clear the field. For a field without presence, restore the
+//	               default.
+//	list index     remove the element; the list shrinks.
+//	map key        delete the entry.
+//	container      message: clear every declared field. list: empty it.
+//	               map: empty it.
+//
+// test — assert, and abort the Patch if the assertion fails.
+//	Never mutates. `on_missing` may not be set on a `test`, and a `test` whose
+//	selectors resolve to zero locations is an error, so a test can never pass
+//	vacuously.
+//	`want.value`   the target exists and equals the value. Kind and declared
+//	               type must match exactly; a vacant target fails.
+//	`want.exists`  true: the target is present. false: it is absent.
+//	               message field: presence as protobuf defines it — an
+//	               explicit-presence field that is set, or a field without
+//	               presence that differs from its default. An undeclared field
+//	               is absent.
+//	               list index: the index is within [0, len).
+//	               map key: the entry exists.
+//	               container: true means NON-EMPTY (a message with at least one
+//	               field set, a non-empty list, a non-empty map); false means
+//	               empty. The container itself always exists — a `path` that
+//	               does not reach one is already an error.
+//	Examples:      map without key "k": targets [map_key "k"], exists=false
+//	               => holds. targets [map_key "k"], want.value => fails.
+//
+// insert — create WITHOUT overwriting. An existing value is an error, which is
+// what distinguishes insert from assign.
+//	message field  set the field only if it is currently absent; otherwise
+//	               error. A field is "already set" if it is set, or if it
+//	               belongs to a target `oneof` that already has a member set.
+//	list index     insert BEFORE the index, shifting the remainder right.
+//	               Use `Selector.append` to add at the end.
+//	map key        add the entry only if the key is absent; otherwise error.
+//	container      message: set only the fields of `value` that are currently
+//	               absent; a field already set (by the rule above) is an error.
+//	               list: append every element of `value` (which must be `l`).
+//	               map: add every entry of `value` (which must be `map`); a key
+//	               already present is an error.
+//
+// assign — set the target to a literal, creating or overwriting as needed.
+//	message field  set the field.
+//	list index     overwrite the element in place. The index must be in range;
+//	               assign never grows a list (use insert with `append`).
+//	map key        set the entry, creating it if absent.
+//	container      replace wholesale: clear the container, then apply `value`.
+//	               The value's kind must match the container (`m`/`l`/`map`).
+//
+// move — read the value at `from`, write it to every target, then clear the
+// source.
+//	A target is written with ASSIGN semantics: an occupied target is
+//	overwritten. `move` never inserts, except at `Selector.append`.
+//	message field  set the field, overwriting if already set.
+//	list index     overwrite the element in place; the list does not grow.
+//	               With `Selector.append`, append after the last element.
+//	map key        set the entry, creating it if absent.
+//	container      error. Moving a value onto a container is not defined.
+//	The source is resolved, and its value read, BEFORE any target is written,
+//	so the result does not depend on target order. The source and every target
+//	must have the same kind (see the table on `Value`) AND the same declared
+//	type: the same fully-qualified message or enum name for `m` and `e`, the
+//	same element kind and type for `l`, and the same key and value types for
+//	`map`. There is no conversion and no reinterpretation of an enum number
+//	across enum types.
+//	Clearing the source uses the `remove` rule for the SOURCE's own container —
+//	a message field is cleared, a list element is removed and the list shrinks,
+//	a map entry is deleted — and happens once, after every target has been
+//	written, against the source position as it was resolved before the entry
+//	began.
+//	If a target resolves to the source location, the entry is a NO-OP for that
+//	target and the source is NOT cleared (RFC 6902 §4.4).
+//
+// copy — as `move`, but the source is left in place.
+//	container      error.
+//
+// nest — apply an inner Delta to the target, which must be a container.
+//	The inner Delta's `Key`s are interpreted relative to that container:
+//	fields for a message, indices for a list, keys for a map. Targeting a
+//	scalar is an error.
+//	container      apply the inner Delta to the container reached by `path`.
+//
+// =================================================================
+message Entry {
+  // Navigate into a nested container before applying. Empty addresses the
+  // container this Delta is applied to. Every container along the way must
+  // already exist.
+  Path path = 1;
+
+  // What the operation applies to. Required — an entry with no scope is an
+  // error. Root behavior is NOT derived from an empty target list.
+  oneof scope {
+    // The listed locations within the container reached by `path`.
+    Targets targets = 2;
+
+    // The container reached by `path`, as a whole.
+    Container container = 3;
+  }
+
+  // How to treat a VACANT target (see `Key`). Defaults to fail.
+  //
+  // This governs ONLY vacant `Selector` targets, and only for kinds other than
+  // `test`. It never applies to `Entry.path`, to a `Location`, to unrecognized
+  // arms or unknown fields, to kind or declared-type mismatches, to a `Field`
+  // whose identifiers disagree, or to a failed `test`.
+  OnMissing on_missing = 4;
+
+  // Exactly one operation. Required.
+  oneof kind {
+    Remove remove = 5;
+    Test   test   = 6;
+    Insert insert = 7;
+    Assign assign = 8;
+    Move   move   = 9;
+    Copy   copy   = 10;
+    Nest   nest   = 11;
+  }
+
+  // Held for future operations, so that a new kind keeps a single-byte tag.
+  reserved 12 to 15;
+}
+
+// Targets lists the locations an operation applies to. `selectors` must not be
+// empty; address the container with `Entry.container` instead.
+message Targets {
+  repeated Selector selectors = 1;
+}
+
+// Container addresses the container reached by `Entry.path` as a whole. It
+// carries no data; it is a message rather than a bool so that it can gain
+// options later without changing `Entry.scope`.
+message Container {}
+
+enum OnMissing {
+  // A vacant target aborts the Patch. This is the ONLY encoding of "fail" —
+  // there is deliberately no explicit FAIL value, so the meaning has exactly
+  // one encoding and the safe behavior is the zero value.
+  ON_MISSING_UNSPECIFIED = 0;
+
+  // A vacant target is skipped. The author opted into this on the wire; a
+  // reader never chooses it.
+  ON_MISSING_SKIP = 1;
+}
+
+message Remove {}
+
+message Test {
+  // Required. An unset `want` is an error, never a passing assertion.
+  oneof want {
+    // The target exists and equals this value.
+    Value value = 1;
+
+    // true: the target is present. false: the target is absent.
+    bool exists = 2;
+  }
+
+  // Held for future assertion forms.
+  reserved 3 to 15;
+}
+
+message Insert {
+  // Required.
+  Value value = 1;
+}
+
+message Assign {
+  // Required.
+  Value value = 1;
+}
+
+message Move {
+  // Required.
+  Location from = 1;
+}
+
+message Copy {
+  // Required.
+  Location from = 1;
+}
+
+message Nest {
+  // Required; must be non-empty.
+  Delta delta = 1;
+}

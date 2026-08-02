@@ -1,0 +1,133 @@
+edition = "2023";
+
+package patch;
+
+import "patch/path.proto";
+
+option features.field_presence = EXPLICIT;
+
+option go_package = "github.com/lesomnus/protobuf-patch/patchpb";
+
+// Value is a literal carried by `test`, `insert`, and `assign`.
+//
+// SELF-DESCRIBING. Each arm corresponds to exactly one protobuf type class, so
+// a reader can validate a Value against a target field WITHOUT converting it,
+// and a producer has exactly one legal arm for any given target. There is no
+// conversion lattice: a Value whose arm does not match the target's kind is an
+// error, never a widened, narrowed, or truncated write.
+//
+//	target field kind                   | arm
+//	------------------------------------+-----
+//	bool                                | b
+//	int32, sint32, sfixed32             | i32
+//	int64, sint64, sfixed64             | i64
+//	uint32, fixed32                     | u32
+//	uint64, fixed64                     | u64
+//	float                               | f32
+//	double                              | f64
+//	string                              | s
+//	bytes                               | x
+//	enum                                | e
+//	message                             | m
+//	repeated (any element type)         | l
+//	map (any key/value type)            | map
+//
+// Given a target field, the arm is uniquely determined, so a Value has exactly
+// one legal encoding of any logical value and can be validated without
+// conversion. This does NOT make a Delta canonical: `MessageValue.fields`,
+// `MapValue.entries`, and `Targets.selectors` are order-insensitive
+// collections stored in ordered `repeated` fields, so byte equality is
+// strictly STRONGER than logical equality. Do not use proto equality on a
+// `Patch` for deduplication or idempotency checks.
+//
+// There is deliberately NO null arm. "Absent" is not a value:
+//   - to clear a field or delete an entry, use `remove`;
+//   - to assert absence, use `test.exists = false`;
+//   - a field absent from a `MessageValue` is simply not set.
+// This removes the three-way overload of null (clear / absent / empty) and the
+// second, redundant spelling of `remove`.
+//
+// An unset `kind` is an ERROR, not an implicit clear. So is an arm this reader
+// does not recognize — see the forward-compatibility rules on `patch.Patch`.
+message Value {
+  oneof kind {
+    bool   b   = 1;
+    sint32 i32 = 2;
+    sint64 i64 = 3;
+    uint32 u32 = 4;
+    uint64 u64 = 5;
+    float  f32 = 6;
+    double f64 = 7;
+    string s   = 8;
+    bytes  x   = 9;
+
+    // Enum value number. Signed: enum numbers are int32 and may be negative.
+    //
+    // Against a CLOSED enum (`features.enum_type = CLOSED`), `e` MUST be a
+    // number the target enum declares; an undeclared number is an error.
+    // Against an OPEN enum any int32 is legal and is stored as written.
+    sint32 e = 10;
+
+    MessageValue m   = 11;
+    ListValue    l   = 12;
+    MapValue     map = 13;
+  }
+
+  reserved 14 to 15;  // remaining single-byte tags, held for future arms
+}
+
+// MessageValue is the contents of a message, keyed by field.
+//
+// Distinct from MapValue so that a Value says for itself whether it is a
+// message or a map, rather than requiring the target descriptor to decide.
+//
+// `fields` keys MUST be unique after resolution; a repeated key is an error.
+//
+// At most one member of any single `oneof` OF THE TARGET MESSAGE may appear in
+// `fields`. Two members of one target oneof are an error even though their
+// keys differ, because setting one clears the other.
+//
+// `fields` is applied as an UNORDERED mapping: no application order is
+// defined, and no two entries may interact.
+//
+// A field absent from `fields` is NOT SET (for `assign` at container scope,
+// which replaces wholesale) or LEFT UNTOUCHED (for `insert` at container
+// scope) — see the per-operation table on `patch.Entry`.
+message MessageValue {
+  repeated FieldValue fields = 1;
+}
+
+message FieldValue {
+  // Required. An unset key is an error.
+  Field key = 1;
+
+  // Required. An unset value is an error — use `remove` to clear a field.
+  Value value = 2;
+}
+
+// ListValue is the contents of a repeated field, in order.
+//
+// Every element must be present and must match the repeated field's element
+// kind. There is no null element, so the encoded length always equals the
+// decoded length.
+message ListValue {
+  repeated Value values = 1;
+}
+
+// MapValue is the contents of a map field.
+//
+// `entries` keys MUST be unique after resolution; a repeated key is an error.
+// `entries` is applied as an unordered mapping.
+message MapValue {
+  repeated MapEntry entries = 1;
+}
+
+message MapEntry {
+  // Required, and must match the map's declared key type. An unset key is an
+  // error.
+  MapKey key = 1;
+
+  // Required. An unset value is an error — protobuf maps cannot hold absent
+  // values; use `remove` to delete an entry.
+  Value value = 2;
+}

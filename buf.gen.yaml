@@ -1,0 +1,9 @@
+version: v2
+inputs:
+  - directory: ./proto
+plugins:
+  - local: [go, tool, google.golang.org/protobuf/cmd/protoc-gen-go]
+    out: .
+    opt:
+      - module=github.com/lesomnus/protobuf-patch
+      - default_api_level=API_OPAQUE

@@ -1,0 +1,107 @@
+edition = "2023";
+
+package sample;
+
+option features.field_presence = IMPLICIT;
+option go_package = "github.com/lesomnus/protobuf-patch/internal/sample";
+
+message Value {
+  double f64_1 = 101;
+  float f32_1 = 102;
+  int64 i64_1 = 103;
+  uint64 u64_1 = 104;
+  int32 i32_1 = 105;
+  fixed64 ux64_1 = 106;
+  fixed32 ux32_1 = 107;
+  bool b_1 = 108;
+  string s_1 = 109;
+  Value m_1 = 111;
+  bytes bs_1 = 112;
+  uint32 u32_1 = 113;
+  Level enum_1 = 114;
+  sfixed32 sx32_1 = 115;
+  sfixed64 sx64_1 = 116;
+  sint32 si32_1 = 117;
+  sint64 si64_1 = 118;
+
+  double f64_2 = 201;
+  float f32_2 = 202;
+  int64 i64_2 = 203;
+  uint64 u64_2 = 204;
+  int32 i32_2 = 205;
+  fixed64 ux64_2 = 206;
+  fixed32 ux32_2 = 207;
+  bool b_2 = 208;
+  string s_2 = 209;
+  Value m_2 = 211;
+  bytes bs_2 = 212;
+  uint32 u32_2 = 213;
+  Level enum_2 = 214;
+  sfixed32 sx32_2 = 215;
+  sfixed64 sx64_2 = 216;
+  sint32 si32_2 = 217;
+  sint64 si64_2 = 218;
+
+  double f64_3 = 301;
+  float f32_3 = 302;
+  int64 i64_3 = 303;
+  uint64 u64_3 = 304;
+  int32 i32_3 = 305;
+  fixed64 ux64_3 = 306;
+  fixed32 ux32_3 = 307;
+  bool b_3 = 308;
+  string s_3 = 309;
+  Value m_3 = 311;
+  bytes bs_3 = 312;
+  uint32 u32_3 = 313;
+  Level enum_3 = 314;
+  sfixed32 sx32_3 = 315;
+  sfixed64 sx64_3 = 316;
+  sint32 si32_3 = 317;
+  sint64 si64_3 = 318;
+
+  double opt_f64 = 401 [features.field_presence = EXPLICIT];
+  float opt_f32 = 402 [features.field_presence = EXPLICIT];
+  int64 opt_i64 = 403 [features.field_presence = EXPLICIT];
+  uint64 opt_u64 = 404 [features.field_presence = EXPLICIT];
+  int32 opt_i32 = 405 [features.field_presence = EXPLICIT];
+  fixed64 opt_ux64 = 406 [features.field_presence = EXPLICIT];
+  fixed32 opt_ux32 = 407 [features.field_presence = EXPLICIT];
+  bool opt_b = 408 [features.field_presence = EXPLICIT];
+  string opt_s = 409 [features.field_presence = EXPLICIT];
+  Value opt_m = 411 [features.field_presence = EXPLICIT];
+  bytes opt_bs = 412 [features.field_presence = EXPLICIT];
+  uint32 opt_u32 = 413 [features.field_presence = EXPLICIT];
+  Level opt_enum = 414 [features.field_presence = EXPLICIT];
+  sfixed32 opt_sx32 = 415 [features.field_presence = EXPLICIT];
+  sfixed64 opt_sx64 = 416 [features.field_presence = EXPLICIT];
+  sint32 opt_si32 = 417 [features.field_presence = EXPLICIT];
+  sint64 opt_si64 = 418 [features.field_presence = EXPLICIT];
+
+  repeated double r_f64_1 = 1001;
+  repeated float r_f32_1 = 1002;
+  repeated int64 r_i64_1 = 1003;
+  repeated uint64 r_u64_1 = 1004;
+  repeated int32 r_i32_1 = 1005;
+  repeated fixed64 r_ux64_1 = 1006;
+  repeated fixed32 r_ux32_1 = 1007;
+  repeated bool r_b_1 = 1008;
+  repeated string r_s_1 = 1009;
+  repeated Value r_m_1 = 1011;
+  repeated bytes r_bs_1 = 1012;
+  repeated uint32 r_u32_1 = 1013;
+  repeated Level r_enum_1 = 1014;
+  repeated sfixed32 r_sx32_1 = 1015;
+  repeated sfixed64 r_sx64_1 = 1016;
+  repeated sint32 r_si32_1 = 1017;
+  repeated sint64 r_si64_1 = 1018;
+
+  map<string, string> m_s_s = 10909;
+  map<string, Value> m_s_m = 10911;
+}
+
+enum Level {
+  LEVEL_UNSPECIFIED = 0;
+  LEVEL_LO = 1;
+  LEVEL_HI = 2;
+}

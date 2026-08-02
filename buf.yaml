@@ -1,0 +1,15 @@
+version: v2
+modules:
+  - path: ./proto
+lint:
+  use:
+    - STANDARD
+  except:
+    # Versioning lives in the package NAME, not a suffix: this schema is
+    # `patch`, and a future breaking revision will be `patchv2` in
+    # proto/patchv2/. Within `patch`, compatible evolution is governed by
+    # Patch.min_reader_revision.
+    - PACKAGE_VERSION_SUFFIX
+breaking:
+  use:
+    - FILE

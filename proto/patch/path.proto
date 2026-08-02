@@ -1,0 +1,228 @@
+edition = "2023";
+
+package patch;
+
+// Presence is load-bearing in this file: `Field` distinguishes an unset
+// identifier from an empty one, and `Range` distinguishes an open bound from a
+// zero bound. EXPLICIT is the edition-2023 default, but it is pinned here so
+// that a change to the default — or a well-meaning edit adding IMPLICIT — is a
+// visible break rather than a silent one.
+option features.field_presence = EXPLICIT;
+
+option go_package = "github.com/lesomnus/protobuf-patch/patchpb";
+
+// Key names EXACTLY ONE location inside a container.
+//
+// The `kind` arm must match the container it is resolved against:
+//
+//	container   | legal arm
+//	------------+-----------------------------------------------
+//	message     | field
+//	list        | index
+//	map         | map_key (matching the map's declared key type)
+//
+// Using an arm that does not match the container is an unconditional error.
+//
+// VACANCY. A Key that is well-formed for its container but names nothing that
+// currently exists — a field the message does not declare, an index outside
+// [0, len), an absent map key — resolves to a VACANT location. Vacancy is not
+// itself a failure; what happens to a vacant location is decided by where the
+// Key appears and by the operation:
+//
+//   - In `Selector.key` under `test`: the vacancy is READ. This is exactly
+//     what `Test.want.exists` reports, and `Entry.on_missing` never applies.
+//   - In `Selector.key` under any other kind: it is a missing target, governed
+//     by `Entry.on_missing` (default: fail).
+//   - In `Path.segments` or in `Location`: an unconditional error.
+//     `Entry.on_missing` reaches only `Selector` targets.
+//
+// Key is deliberately single-valued: it is the only segment type permitted in
+// `Path`, because a path must reach exactly one container. Multi-valued
+// segments live in `Selector`, which is permitted only in `Entry.targets`.
+message Key {
+  oneof kind {
+    // A field of a message.
+    Field field = 1;
+
+    // An element of a list.
+    //
+    // Negative values count from the end: the effective index is `len + index`.
+    // This holds for EVERY operation — there is no per-operation off-by-one.
+    // "One past the end" is not expressible here; use `Selector.append`.
+    //
+    // An index outside `[0, len)` after normalization is VACANT (see above).
+    sint64 index = 2;
+
+    // An entry of a map.
+    MapKey map_key = 3;
+  }
+}
+
+// Field identifies a message field. It is a CONSTRAINT, not a mere selector:
+// every identifier that is set must agree, and disagreement is an error rather
+// than a fallback. This is what lets a stored Patch refuse to apply to a
+// message whose fields were renamed or renumbered underneath it.
+//
+// Resolution, in order:
+//  1. If `number` is set, resolve by number. Otherwise if `name` is set,
+//     resolve by name. Otherwise resolve by `json_name`.
+//     (`number` goes first because the field number is protobuf's stable
+//     identity; names may be edited without a wire break.)
+//  2. Every OTHER identifier that is set must equal the corresponding property
+//     of the resolved field. Any disagreement is an error — NOT a vacancy, and
+//     never subject to `Entry.on_missing`. Disagreement means the Patch was
+//     authored against a different schema; that must never be skipped.
+//
+// If no identifier resolves to a declared field, the Key is VACANT.
+//
+// A Field with no identifier set is an error. A set-but-empty `name` or
+// `json_name` is an error, since neither is a legal protobuf field name.
+message Field {
+  // The field's declared name, e.g. "user_id".
+  string name = 1;
+
+  // The field's ProtoJSON name, e.g. "userId" — the value of the field's
+  // `json_name` if set, otherwise the lowerCamelCase derivation of `name`.
+  // Set this when the patch is authored against a JSON view of the message.
+  // It may be set alone, or together with `name`/`number` as a constraint.
+  string json_name = 2;
+
+  // The field number. Must be >= 1; 0 is not a legal field number.
+  uint32 number = 3;
+}
+
+// MapKey identifies a map entry. The arm MUST match the map's declared key
+// type; a mismatch is an error and is never coerced. In particular a numeric
+// arm is NOT stringified onto a string-keyed map.
+//
+//	declared key type              | arm
+//	-------------------------------+-----
+//	string                         | s
+//	int32, sint32, sfixed32        | i
+//	int64, sint64, sfixed64        | i
+//	uint32, fixed32                | u
+//	uint64, fixed64                | u
+//	bool                           | b
+//
+// (These are exactly protobuf's legal map key types; float, double, bytes,
+// enum, and message keys do not exist.)
+//
+// The carried value MUST also lie within the declared key type's range: `i`
+// against a `map<int32, V>` must lie in [-2^31, 2^31), `u` against a
+// `map<uint32, V>` in [0, 2^32). A value outside that range is an ERROR — it
+// is never truncated, and it is never a merely vacant key that
+// `Entry.on_missing` can skip.
+//
+// The empty string is a legal `s` key and is unambiguous here, because the
+// oneof carries its own presence.
+message MapKey {
+  oneof kind {
+    string s = 1;
+    sint64 i = 2;
+    uint64 u = 3;
+    bool   b = 4;
+  }
+}
+
+// Path navigates INTO a nested container before an operation is applied.
+//
+// A Path is ALWAYS relative to the container that the enclosing `Delta` is
+// applied to; for the outermost Delta that is the root message. Empty
+// `segments` addresses that container itself. A Path only descends: it can
+// never reach a sibling or an ancestor, so a nested Delta cannot escape the
+// container that `nest` handed it.
+//
+// Every container along the path must already exist. A path that descends into
+// an unset message, list, or map — or through a vacant `Key` — is an error. A
+// Patch never auto-creates intermediate containers, and `Entry.on_missing`
+// never applies to a Path. (Create containers with an explicit `assign` in an
+// earlier entry.)
+message Path {
+  repeated Key segments = 1;
+}
+
+// Selector names ZERO OR MORE locations inside a container. It is the segment
+// type used by `Entry.targets`.
+message Selector {
+  oneof kind {
+    // Exactly one location. Legal in every container.
+    Key key = 1;
+
+    // A contiguous span of list elements. Legal ONLY against a list.
+    Range range = 2;
+
+    // The position one past the last list element — the RFC 6901 "-" token.
+    // Legal ONLY against a list, and only with `insert`, `move`, and `copy`,
+    // each of which can grow a list. It is an error with `remove`, `assign`,
+    // `test`, and `nest`, none of which can.
+    //
+    // This exists so that "append" has its own encoding instead of being
+    // smuggled into `Key.index` as a magic value, which is what forces
+    // negative indices to mean different things in different operations.
+    Append append = 3;
+  }
+}
+
+// Range selects the list elements in the half-open interval [begin, end).
+//
+// Normalization, in order:
+//  1. `begin` unset => 0.        `end` unset => len.
+//  2. A negative bound v => len + v.
+//  3. Both bounds are clamped to [0, len].
+//
+// After normalization, `begin >= end` selects NOTHING. That is a defined
+// result, not a failure: the range is well-formed and its answer is empty.
+// A Range never wraps around, and never selects a union of two spans — express
+// that as two entries in `targets`.
+//
+// Examples for a list of length 5 (x = selected):
+//
+//	xxxxx  [_, _)   => [0, 5)   all elements
+//	---xx  [-2, _)  => [3, 5)   last two
+//	xxx--  [_, -2)  => [0, 3)   all but the last two
+//	-xxx-  [1, 4)   => [1, 4)   the middle three
+//	-----  [3, 2)   => empty    begin >= end
+//	-----  [9, _)   => empty    clamped to [5, 5)
+//
+// `begin` and `end` share one normalization rule; unset and 0 are distinct.
+//
+// A Range never produces a vacant location: it selects only indices that
+// exist. `Entry.on_missing` therefore has no effect on a Range.
+message Range {
+  // Inclusive lower bound. Unset means 0.
+  sint64 begin = 1;
+
+  // Exclusive upper bound. Unset means the collection length.
+  sint64 end = 2;
+}
+
+// Append is the position one past the last element of a list. It carries no
+// data; it is a message rather than a bool so that it can gain options later
+// without burning a `Selector` arm.
+message Append {}
+
+// Location names a source position for `move` and `copy`.
+//
+// It may name a container other than the one holding the targets — this is
+// what makes cross-container move/copy expressible — but never one outside the
+// enclosing `Delta`'s container.
+message Location {
+  // Where the source container is. Required: "the entry's own container" is an
+  // explicit choice here, never an absence.
+  oneof origin {
+    // Relative to the enclosing `Delta`'s container, exactly like
+    // `Entry.path`. Empty `segments` means that container itself.
+    Path path = 1;
+
+    // The container reached by `Entry.path`, i.e. where the targets live.
+    SameContainer same_container = 3;
+  }
+
+  // The source position within that container. Required; an unset `key` is an
+  // error, and a vacant `key` is an error (never skipped).
+  Key key = 2;
+}
+
+// SameContainer selects the container reached by `Entry.path`. It carries no
+// data; it is a message so that it can gain options later.
+message SameContainer {}
