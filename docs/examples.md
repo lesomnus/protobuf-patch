@@ -14,6 +14,9 @@ map<string, string> m_s_s = 10909;
 Closed closed_1 = 119;   // a CLOSED enum declaring 0, 1, 2
 ```
 
+> These show the documents. For assembling them in Go, see
+> [builder.md](builder.md).
+
 - [ProtoJSON is for reading](#protojson-is-for-reading)
 - [Changing one field](#changing-one-field)
 - [The basic operations](#the-basic-operations)

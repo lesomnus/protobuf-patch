@@ -63,6 +63,7 @@ tested, so a new one cannot appear silently. See [engines.md](docs/engines.md).
 
 | | |
 | --- | --- |
+| [builder.md](docs/builder.md) | Assembling patches in Go, and what the builder will not let you write |
 | [format.md](docs/format.md) | The format: addressing, values, operations, failure, evolution |
 | [examples.md](docs/examples.md) | Patches in ProtoJSON, with their real inputs, outputs, and errors |
 | [engines.md](docs/engines.md) | The three engines, what each can enforce, and where they differ |

@@ -2,6 +2,7 @@
 
 A reference for `patch.Patch`. The normative source is the comments in
 [`proto/patch/`](../proto/patch/); this page is the readable version of them.
+For assembling a patch in Go, see [builder.md](builder.md).
 
 - [A patch is a message](#a-patch-is-a-message)
 - [Anatomy of an entry](#anatomy-of-an-entry)
