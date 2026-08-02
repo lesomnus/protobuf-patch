@@ -29,6 +29,12 @@ failure — a test that does not hold, a field that has moved, an operation from
 a newer revision of the schema — leaves the input untouched. There is
 deliberately no in-place variant, because one could not honor that.
 
+Naming a message type is optional, and its presence is the assertion: a patch
+that declares one is refused against anything else, and one built with
+`patch.NewUntyped` applies to any message. That is for the operations that
+address fields several resource types share — a name, an etag, labels — where
+requiring a type would mean a copy of the document per resource.
+
 A patch can also be applied to JSON that has no schema at all:
 
 ```go

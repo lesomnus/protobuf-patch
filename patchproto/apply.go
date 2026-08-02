@@ -38,10 +38,15 @@ func Apply[T proto.Message](m T, p *patchpb.Patch, opts ...Option) (T, error) {
 		return zero, patch.Errf(patch.CodeMissingField, "", "nil target")
 	}
 
-	want := protoreflect.FullName(p.GetMessageType())
-	if got := m.ProtoReflect().Descriptor().FullName(); got != want {
-		return zero, patch.Errf(patch.CodeMessageTypeMismatch, "message_type",
-			"the document was authored against %s, the target is %s", want, got)
+	// The check happens only when the document makes the assertion. A Patch
+	// with no message_type declares itself type-agnostic, which is how one
+	// document addresses the fields several resource types share.
+	if p.HasMessageType() {
+		want := protoreflect.FullName(p.GetMessageType())
+		if got := m.ProtoReflect().Descriptor().FullName(); got != want {
+			return zero, patch.Errf(patch.CodeMessageTypeMismatch, "message_type",
+				"the document was authored against %s, the target is %s", want, got)
+		}
 	}
 
 	draft := proto.Clone(m)

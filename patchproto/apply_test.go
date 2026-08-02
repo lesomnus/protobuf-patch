@@ -576,3 +576,45 @@ func equalMaps(a, b map[string]string) bool {
 }
 
 var _ = patchpb.Patch{}
+
+// TestMessageTypeIsAnAssertionNotARequirement covers the reason it is optional:
+// resource messages share a prefix of common fields, and a patch that only
+// addresses those applies to all of them. Naming a type would force a copy of
+// the document per resource, or rewriting a stored document before each apply.
+func TestMessageTypeIsAnAssertionNotARequirement(t *testing.T) {
+	t.Run("a patch that declares no type applies", func(t *testing.T) {
+		p := patch.MustNewUntyped(patch.Target(patch.Name("s_1")).Assign(patch.Str("v")))
+		got, err := patchproto.Apply(&sample.Value{}, p)
+		if err != nil {
+			t.Fatalf("Apply: %v", err)
+		}
+		if got.GetS_1() != "v" {
+			t.Errorf("= %v", got)
+		}
+	})
+
+	t.Run("one that declares the right type applies", func(t *testing.T) {
+		p := patch.MustNew(mt, patch.Target(patch.Name("s_1")).Assign(patch.Str("v")))
+		if _, err := patchproto.Apply(&sample.Value{}, p); err != nil {
+			t.Fatalf("Apply: %v", err)
+		}
+	})
+
+	t.Run("one that declares the wrong type is still refused", func(t *testing.T) {
+		p := patch.MustNew("some.other.Message", patch.Target(patch.Name("s_1")).Remove())
+		_, err := patchproto.Apply(&sample.Value{}, p)
+		if patch.CodeOf(err) != patch.CodeMessageTypeMismatch {
+			t.Fatalf("CodeOf = %v, want CodeMessageTypeMismatch", patch.CodeOf(err))
+		}
+	})
+
+	t.Run("declaring no type does not weaken the per-field check", func(t *testing.T) {
+		// The coarse guard is what becomes optional. The fine one -- a Field
+		// pinning a name against a number -- is per-field and still bites.
+		p := patch.MustNewUntyped(patch.Target(patch.Name("s_1").Num(209)).Remove())
+		_, err := patchproto.Apply(&sample.Value{}, p)
+		if patch.CodeOf(err) != patch.CodeFieldConflict {
+			t.Fatalf("CodeOf = %v, want CodeFieldConflict", patch.CodeOf(err))
+		}
+	})
+}

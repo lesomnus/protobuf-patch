@@ -88,11 +88,19 @@ const (
 	// The corpus fixture is a protobuf message with fields this mirror does
 	// not carry. Not a semantic divergence — the target simply differs.
 	causeNotMirrored = "the case addresses a field the Go mirror does not declare"
+
+	// A Go type name is not a protobuf message name, so there is nothing to
+	// compare Patch.message_type against unless the caller supplies one with
+	// ExpectType. The corpus runner does not.
+	causeNoTypeName = "a Go type name is not a protobuf name, so message_type has nothing to check against"
 )
 
 var knownDivergences = map[string]string{
 	"duplicate_target_is_an_error":    causeNoNumbers,
 	"field_conflict_is_never_skipped": causeNoNumbers,
+
+	"an_empty_message_type_is_not_the_same_as_none": causeNoTypeName,
+	"an_untyped_patch_still_checks_the_field":       causeNoNumbers,
 }
 
 // TestDivergenceFromPatchproto runs the shared corpus against the Go mirror.

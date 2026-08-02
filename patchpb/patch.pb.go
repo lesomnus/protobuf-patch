@@ -95,7 +95,7 @@ func (x OnMissing) Number() protoreflect.EnumNumber {
 // FAIL CLOSED. Every one of the following is an ERROR that aborts the whole
 // Patch. None may be skipped, defaulted, or treated as a no-op:
 //
-//   - `message_type` does not name the target message.
+//   - `message_type` is set and does not name the target message.
 //   - `min_reader_revision` exceeds the revision this reader implements.
 //   - An unrecognized `oneof` arm anywhere in the document — in `Entry.kind`,
 //     `Entry.scope`, `Selector.kind`, `Key.kind`, `MapKey.kind`, `Value.kind`,
@@ -115,6 +115,7 @@ func (x OnMissing) Number() protoreflect.EnumNumber {
 //     `Location.origin`.
 //   - An unset required field: `FieldValue.key`, `FieldValue.value`,
 //     `MapEntry.key`, `MapEntry.value`, `Location.key`, `Patch.delta`.
+//     (`message_type` is NOT among them — see its own comment.)
 //   - `Targets.selectors` is empty, or `Delta.entries` is empty. (Address a
 //     container explicitly with `Entry.container` — a producer that computed
 //     zero targets has a bug, and must not silently be handed the most
@@ -254,12 +255,29 @@ type Patch_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	// Fully-qualified name of the message this Patch was authored against, e.g.
-	// "example.v1.User". Required. An applier MUST reject a Patch whose
-	// `message_type` does not match the message it is being applied to.
+	// "example.v1.User".
 	//
-	// This is what lets a stored Patch — which may outlive the schema it was
-	// written against — be validated, logged, and routed without the target
-	// descriptor in hand.
+	// OPTIONAL, and its presence is itself the assertion. When it is set an
+	// applier MUST reject a Patch whose `message_type` does not match the
+	// message it is being applied to. When it is unset the Patch declares itself
+	// TYPE-AGNOSTIC and no such check happens.
+	//
+	// Leaving it unset is a real case, not a shortcut. Resource messages
+	// routinely share a prefix of common fields — a name, an etag, labels — and
+	// a Patch that only addresses those applies to every one of them. Requiring
+	// a type would force either a copy of the document per resource, or
+	// rewriting the field before each apply, and rewriting a stored document to
+	// make it applicable defeats the point of storing it.
+	//
+	// What is lost by leaving it unset is only the coarsest of the format's
+	// integrity checks. The finer one survives and is per-field: a `Field` that
+	// pins a name against a number still refuses a message whose fields moved
+	// (see `Field`), and an unrecognized arm is still refused whatever the type.
+	//
+	// What is gained by setting it is that a stored Patch — which may outlive
+	// the schema it was written against — can be validated, logged, and routed
+	// without the target descriptor in hand. Set it whenever the Patch really is
+	// for one message.
 	MessageType *string
 	// The lowest revision of this schema a reader must implement in order to
 	// apply the document correctly. 0 means "patch.proto as first published".

@@ -11,7 +11,11 @@ import (
 const Revision uint32 = 0
 
 // New assembles a Patch for messages of type messageType, which must be the
-// fully-qualified name of the message the operations address.
+// fully-qualified name of the message the operations address. An applier
+// refuses it against anything else.
+//
+// Use NewUntyped when the operations are meant to apply to more than one
+// message type.
 //
 // At least one operation is required: a Patch that does nothing is expressible
 // as a test that holds, which says so explicitly.
@@ -27,12 +31,40 @@ func New(messageType string, first Op, rest ...Op) (*patchpb.Patch, error) {
 		return nil, err
 	}
 	if messageType == "" {
-		return nil, Errf(CodeMessageTypeMismatch, "message_type", "empty")
+		return nil, Errf(CodeMessageTypeMismatch, "message_type",
+			"empty; use NewUntyped to say that on purpose")
 	}
 	return patchpb.Patch_builder{
 		MessageType: proto.String(messageType),
 		Delta:       d,
 	}.Build(), nil
+}
+
+// NewUntyped assembles a Patch that names no message type, so no applier
+// checks one.
+//
+// This is for operations that address fields several message types share — a
+// resource's name, its etag, its labels. Naming a type would force a copy of
+// the document per resource, and rewriting the field before each apply would
+// mean altering a stored document to make it applicable.
+//
+// The per-field integrity check is unaffected: a Field that pins a name
+// against a number still refuses a message whose fields moved.
+func NewUntyped(first Op, rest ...Op) (*patchpb.Patch, error) {
+	d, err := delta(first, rest...)
+	if err != nil {
+		return nil, err
+	}
+	return patchpb.Patch_builder{Delta: d}.Build(), nil
+}
+
+// MustNewUntyped is NewUntyped, panicking on error.
+func MustNewUntyped(first Op, rest ...Op) *patchpb.Patch {
+	p, err := NewUntyped(first, rest...)
+	if err != nil {
+		panic(err)
+	}
+	return p
 }
 
 // MustNew is New, panicking on error. Intended for tests and for patches built

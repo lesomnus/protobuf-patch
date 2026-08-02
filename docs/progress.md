@@ -449,3 +449,23 @@ func Apply[T any](v T, p *patchpb.Patch, opts ...Option) (T, error)
 ### 생성된 구조체는 대상이 아니다
 
 opaque API에서 필드가 전부 `xxx_hidden_*`로 **unexported**라 `reflect`가 닿지 못한다. 그리고 어차피 이미 `proto.Message`라 `patchproto`가 처리한다. 이 엔진은 **평범한 도메인 타입**을 위한 것이다.
+
+---
+
+## `message_type`을 선택으로 (개정)
+
+**바뀐 것**: `Patch.message_type`이 필수에서 선택으로. 검사는 **문서가 선언했을 때만** 일어난다. 모든 엔진에 같은 규칙.
+
+**왜**: 리소스 메시지들이 앞쪽 필드를 공유하는 구조에서, 그 공통 필드만 건드리는 패치는 모든 리소스에 쓸 수 있어야 한다. 필수로 두면 **리소스마다 문서를 복제하거나 적용 직전에 필드를 고쳐 써야** 하는데, 후자는 저장된 문서를 변조하는 것이라 저장할 이유를 없앤다.
+
+**fail-closed와 충돌하지 않는 이유**: `on_missing`은 *실패했을 때* 무엇을 할지 정하지만 `message_type`은 **작성자가 할 수도 안 할 수도 있는 단언**이다. 안 한 단언을 검사하지 않는 건 "문서가 요구한 것보다 덜 하는 것"이 아니다. 그리고 선언 여부가 와이어에 그대로 남는다.
+
+**포기하는 것**: 가장 거친 검사 하나. 세밀한 쪽 — `Field`가 이름과 번호를 함께 못박아 필드가 옮겨진 메시지를 거부하는 것 — 은 **필드 단위**라 그대로 남는다. 미지의 arm 거부도 타입과 무관하다.
+
+**빈 문자열 ≠ 없음**: `"message_type": ""`는 어떤 메시지도 만족할 수 없는 선언이라 거부된다. 의미를 나르는 것은 값이 아니라 presence다. 코퍼스 `an_empty_message_type_is_not_the_same_as_none`이 고정한다.
+
+**API**: `patch.New(mt, ...)` / `patch.NewUntyped(...)`. `New("")`은 실수일 가능성이 높아 여전히 오류다.
+
+**가드가 즉시 일했다.** 코퍼스에 케이스 셋을 넣자 patchjson·patchstruct에서 미선언 불일치 둘이 바로 잡혔다 — 둘 다 타입 이름을 가질 수 없어 `message_type`을 검사할 수 없다는, 이미 알려진 한계였다. `causeNoTypeName`으로 선언했다.
+
+코퍼스 42개 기준 일치율: patchproto 42/42 · patchstruct 38 · patchjson 29.

@@ -1,0 +1,42 @@
+# Patch.message_type is an assertion the author may or may not make, not a
+# requirement. Its presence is what carries the meaning.
+
+cases {
+  name: "an_untyped_patch_applies"
+  doc: "A Patch that declares no message_type is type-agnostic, which is how one document addresses fields several resource types share."
+  input { s_1: "old" }
+  patch {
+    delta { entries {
+      targets { selectors { key { field { name: "s_1" } } } }
+      assign { value { s: "new" } }
+    } }
+  }
+  output { s_1: "new" }
+}
+
+cases {
+  name: "an_empty_message_type_is_not_the_same_as_none"
+  doc: "Set-to-empty is a declaration that no message can satisfy; presence is what distinguishes it from an untyped Patch."
+  input { s_1: "old" }
+  patch {
+    message_type: ""
+    delta { entries {
+      targets { selectors { key { field { name: "s_1" } } } }
+      assign { value { s: "new" } }
+    } }
+  }
+  error: "message type mismatch"
+}
+
+cases {
+  name: "an_untyped_patch_still_checks_the_field"
+  doc: "Declaring no type gives up the coarse guard only; a Field pinning a name against a number still refuses a message whose fields moved."
+  input { s_1: "x" }
+  patch {
+    delta { entries {
+      targets { selectors { key { field { name: "s_1" number: 209 } } } }
+      remove {}
+    } }
+  }
+  error: "field identifiers disagree"
+}

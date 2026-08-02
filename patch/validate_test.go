@@ -162,10 +162,15 @@ func TestValidateDocumentLevel(t *testing.T) {
 		assertCode(t, patch.Validate(nil), patch.CodeMissingField)
 	})
 
-	t.Run("no message_type", func(t *testing.T) {
+	t.Run("no message_type is fine", func(t *testing.T) {
+		// Its presence is the assertion. A Patch that declares no type is
+		// type-agnostic on purpose, which is how one document addresses the
+		// fields several resource types share.
 		p := patch.MustNew(mt, patch.Target(patch.Name("s_1")).Remove())
 		p.ClearMessageType()
-		assertCode(t, patch.Validate(p), patch.CodeMissingField)
+		if err := patch.Validate(p); err != nil {
+			t.Fatalf("Validate: %v", err)
+		}
 	})
 
 	t.Run("no delta", func(t *testing.T) {

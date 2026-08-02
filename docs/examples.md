@@ -308,7 +308,46 @@ delta.entries[0].targets.selectors[0].key.field: field identifiers disagree:
 
 ---
 
-## 5. 요약
+## 5. `message_type`은 선택이다
+
+`message_type`은 **작성자가 할 수도 안 할 수도 있는 단언**이고, **있을 때만** 검사된다.
+
+```json
+{
+  "delta": { "entries": [ ... ] }
+}
+```
+
+`message_type`이 없으면 그 패치는 **타입에 매이지 않는다**고 선언한 것이고, 어떤 메시지에도 적용된다.
+
+리소스 메시지들이 앞쪽 필드를 공유하는 건 흔한 구조다 — 이름, etag, 라벨. 그 필드들만 건드리는 패치는 모든 리소스에 그대로 쓸 수 있어야 한다. 타입을 요구하면 **리소스마다 문서를 복제하거나 적용 직전에 필드를 고쳐 써야 하고**, 저장된 문서를 고쳐 써야 적용된다면 저장할 이유가 없어진다.
+
+포기하는 것은 형식의 **가장 거친** 무결성 검사 하나뿐이다. 세밀한 쪽은 필드 단위로 남아 있다:
+
+```json
+"field": { "name": "s_1", "number": 209 },
+```
+
+```
+delta.entries[0].targets.selectors[0].key.field: field identifiers disagree:
+  field 209 of sample.Value is named "s_2", not "s_1"
+```
+
+`message_type`이 없어도 이건 그대로 걸린다.
+
+> 빈 문자열은 "없음"이 아니다. `"message_type": ""`는 **어떤 메시지도 만족할 수 없는 선언**이고 거부된다. 의미를 나르는 것은 값이 아니라 **필드의 존재 여부**다.
+
+Go에서는:
+
+```go
+patch.New("example.v1.User", ...)   // 타입을 못박는다
+patch.NewUntyped(...)               // 매이지 않는다고 말한다
+patch.New("", ...)                  // 오류 — 실수일 가능성이 높다
+```
+
+---
+
+## 6. 요약
 
 - `Patch`는 **바이너리로** 주고받는다. ProtoJSON은 읽기용이다 (§0)
 - `targets`는 **순서 없는 집합**, 인덱스는 **엔트리 시작 전** 상태 기준
@@ -316,3 +355,4 @@ delta.entries[0].targets.selectors[0].key.field: field identifiers disagree:
 - **타입 변환은 없다.** 맞지 않는 arm은 거부된다 (§3)
 - **모든 실패는 대상을 건드리지 않는다**
 - 관용은 `on_missing`으로 **문서에 적어야** 하고, 타입 오류·식별자 불일치·미지의 arm에는 적용되지 않는다
+- `message_type`은 **선택**이다. 있으면 검사하고, 없으면 타입에 매이지 않는 패치다 (§5)

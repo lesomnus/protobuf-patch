@@ -28,9 +28,32 @@ func TestNew(t *testing.T) {
 }
 
 func TestNewRejectsEmptyMessageType(t *testing.T) {
+	// Passing "" to New is a mistake; saying so on purpose is NewUntyped.
 	_, err := patch.New("", patch.Target(patch.Name("s_1")).Remove())
 	if patch.CodeOf(err) != patch.CodeMessageTypeMismatch {
 		t.Fatalf("CodeOf = %v, want CodeMessageTypeMismatch (err=%v)", patch.CodeOf(err), err)
+	}
+}
+
+func TestNewUntyped(t *testing.T) {
+	p := patch.MustNewUntyped(patch.Target(patch.Name("s_1")).Assign(patch.Str("v")))
+
+	if p.HasMessageType() {
+		t.Errorf("message_type = %q, want unset", p.GetMessageType())
+	}
+	if err := patch.Validate(p); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+
+	// Unset must be distinguishable from set-to-empty on the wire, since the
+	// presence is what carries the meaning.
+	typed := patch.MustNew("x", patch.Target(patch.Name("s_1")).Assign(patch.Str("v")))
+	typed.SetMessageType("")
+	if !typed.HasMessageType() {
+		t.Fatal("an explicitly empty message_type lost its presence")
+	}
+	if proto.Equal(p, typed) {
+		t.Error("an untyped Patch and one with an empty type encode identically")
 	}
 }
 

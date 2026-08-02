@@ -49,6 +49,12 @@ const (
 	// consumer cannot check, so it refuses them — earlier, and for a different
 	// reason than the case is pinning.
 	causeNoNumbers = "a field number cannot be checked without a schema, so it is refused first"
+
+	// A JSON document does not name its own type, so there is nothing to
+	// compare Patch.message_type against unless the caller supplies a name
+	// with ExpectType. The corpus runner does not, since it is testing the
+	// operations rather than the routing.
+	causeNoTypeName = "a JSON document carries no type name to check message_type against"
 )
 
 var knownDivergences = map[string]string{
@@ -63,6 +69,9 @@ var knownDivergences = map[string]string{
 	"range_open_from_zero_is_everything": causeEmptyContainer,
 
 	"relocation_requires_the_same_kind": causeNoTypes,
+
+	"an_empty_message_type_is_not_the_same_as_none": causeNoTypeName,
+	"an_untyped_patch_still_checks_the_field":       causeNoNumbers,
 
 	"duplicate_target_is_an_error":    causeNoNumbers,
 	"field_conflict_is_never_skipped": causeNoNumbers,

@@ -29,9 +29,6 @@ func Validate(p *patchpb.Patch) error {
 			"a field from a newer revision, or corrupt input; refusing rather than applying the part that is understood")
 	}
 
-	if p.GetMessageType() == "" {
-		return Errf(CodeMissingField, "message_type", "required")
-	}
 	if rev := p.GetMinReaderRevision(); rev > Revision {
 		return Errf(CodeReaderRevisionTooOld, "min_reader_revision",
 			"document requires revision %d, this build implements %d", rev, Revision)

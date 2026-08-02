@@ -22,7 +22,7 @@
 // because silence would be worse:
 //
 //	Patch.message_type       a JSON document does not name its own type; pass
-//	                         ExpectType to check it against a name you know
+//	                         ExpectType to supply the name it must match
 //	move/copy declared type  there are no declared types to compare
 package patchjson
 
@@ -43,11 +43,12 @@ type options struct {
 	expect string
 }
 
-// ExpectType makes Apply check the Patch's message_type against name.
+// ExpectType supplies the name a Patch's message_type must match.
 //
-// Without it the field is not checked, because a JSON document does not carry
-// a type to check it against. Supply one whenever you know it: it is the
-// format's only guard against a document authored for something else.
+// A JSON document does not carry a type of its own, so without this there is
+// nothing to compare against and the field goes unchecked. The check also only
+// applies when the document declares a type: a Patch with no message_type is
+// type-agnostic by construction and passes.
 func ExpectType(name string) Option {
 	return func(o *options) { o.expect = name }
 }
@@ -93,7 +94,7 @@ func ApplyValue(v any, p *patchpb.Patch, opts ...Option) (any, error) {
 	if err := patch.Validate(p); err != nil {
 		return nil, err
 	}
-	if o.expect != "" && p.GetMessageType() != o.expect {
+	if o.expect != "" && p.HasMessageType() && p.GetMessageType() != o.expect {
 		return nil, patch.Errf(patch.CodeMessageTypeMismatch, "message_type",
 			"the document was authored against %s, not %s", p.GetMessageType(), o.expect)
 	}
