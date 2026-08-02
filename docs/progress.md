@@ -12,7 +12,7 @@
 | P3 값 모델 | ✅ | `patch/value.go` |
 | P4 주소 해석 | ✅ | `patch/resolve.go`, `patchproto/cont.go` |
 | P5 적용 | ✅ | `patchproto/`, `conformance/` |
-| P6 RFC 6902 변환 | ⬜ | `jsonpatch/` |
+| P6 RFC 6902 변환 | ✅ | `jsonpatch/convert.go` |
 
 ---
 
@@ -283,3 +283,64 @@ conformance.Run(t, func(in *sample.Value, p *patchpb.Patch) (*sample.Value, erro
 `runCase`가 **모든 케이스마다** 입력 무손상을 확인한다 — 원자성은 특정 케이스의 주제가 아니라 전역 불변식이다.
 
 코퍼스 자체도 검사한다. `TestCorpusIsWellFormed`는 오타 난 에러 이름과 결과를 말하지 않는 케이스를 잡고, `TestCorpusCoversTheOperations`는 여섯 연산 중 하나라도 케이스가 없으면 실패한다 — 스키마에 연산을 추가하고 코퍼스를 방치할 수 없게 한다.
+
+---
+
+## P6 — RFC 6902 변환 ✅
+
+`jsonpatch/convert.go`
+
+```go
+func Convert(doc Doc, md protoreflect.MessageDescriptor) (*patchpb.Patch, error)
+```
+
+### 계획과 달라진 점: `messageType string` → `protoreflect.MessageDescriptor`
+
+계획서는 `FromJsonPatch(doc, messageType string)`이었다. 불가능하다.
+
+**JSON Patch는 타입이 없고 새 스키마는 arm이 정확해야 한다.** 포인터 세그먼트 `"3"`은 가리키는 대상에 따라 리스트 인덱스이거나 맵 키이거나 필드 이름이고, JSON 숫자 `5`는 대상 필드에 따라 `i32`/`u64`/`f64` 중 하나다. 타입이 어딘가에서 와야 하는데 **descriptor가 그것이 존재하는 유일한 곳**이다.
+
+`message_type`은 descriptor에서 얻으므로 인자가 늘지 않는다.
+
+### 값 변환은 protojson을 거친다
+
+`{"<jsonName>": <raw>}`로 감싸 `dynamicpb` 메시지에 `protojson.Unmarshal`한 뒤 필드를 읽어 `patch.ValueOf`로 되돌린다. base64 bytes, enum 이름, 문자열로 쓴 64비트 정수, well-known 타입이 **protobuf 나머지와 같은 뜻**을 갖는다 — JSON→proto 변환을 직접 짜면 이 중 하나는 반드시 틀린다.
+
+리스트 원소는 `[raw]`로, 맵 값은 `{"<선언된 키 타입에 맞는 자리표시자>": raw}`로 감싼다.
+
+### 이제 전역이다
+
+구 구현이 거부하던 것들:
+
+| RFC 6902 | 구 구현 | 신 구현 |
+|---|---|---|
+| `test` | **조용히 버림** | `test`로 변환 |
+| cross-container `move`/`copy` | 오류 | `Location`이 자체 path를 실어 표현 |
+| `copy /a/0 → /b/-` | 표현 불가 | `append`가 `copy`에도 허용되어 가능 |
+| `add`(기존 멤버) | `assign` | `assign` (`insert`는 이제 거부하므로) |
+| JSON `null` | `ValNull()` | `remove` — 형식에 null이 없다 |
+| `test` + `null` | 버림 | `exists: false` |
+
+`TestConvertIsTotal`이 이 여섯을 고정한다. 특히 **`test`를 버리지 않는다**는 것 — 구 구현은 가드가 걸린 문서를 가드 없는 문서로 조용히 바꿨다.
+
+### `patch.ValueOf` 추가
+
+`Scalar`의 역방향에 컨테이너 형태를 더한 것. 읽은 값을 쓸 수 있는 값으로 바꾼다. `MessageValue`의 키는 **필드 번호**로 쓴다 — protobuf의 안정된 정체성이라 이름이 바뀌어도 뜻이 유지된다.
+
+---
+
+## 완료
+
+| 단계 | 패키지 | 테스트 |
+|---|---|---|
+| P0 에러 분류 | `patch/errors.go` | 조항 ↔ 코드 매핑 고정 |
+| P1 빌더 | `patch/build*.go` | 무효 상태는 컴파일 불가 |
+| P2 구조 검증 | `patch/validate.go` | unknown field 6개 위치 |
+| P3 값 모델 | `patch/value.go` | 16 필드 × 10 생성자 전수 |
+| P4 주소 해석 | `patch/resolve.go`, `patchproto/cont.go` | 스키마 Range 예제가 곧 테스트 |
+| P5 적용 | `patchproto/`, `conformance/` | 7×4 + 적합성 39케이스 |
+| P6 RFC 6902 | `jsonpatch/convert.go` | 전역성 |
+
+`go test ./...` 388개 하위 테스트 통과 · `buf lint` 클린 · `gofmt` 클린.
+
+**남은 것은 `patchwire`뿐이다.** `internal/spec` 대신 `patch/`를 공유하고, `conformance.Run`에 자기 `Applier`를 넘겨 `patchproto`와 같은 답을 내는지 고정하면 된다.

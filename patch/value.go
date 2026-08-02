@@ -352,3 +352,139 @@ func mapArmName(k *patchpb.MapKey) string {
 func describeField(fd protoreflect.FieldDescriptor) string {
 	return string(fd.FullName())
 }
+
+// ValueOf converts a live protoreflect value at the given site into the Value
+// that would set it.
+//
+// This is the inverse of Scalar, extended to the container forms: it is what a
+// producer needs to turn something it has read into something it can write.
+func ValueOf(pv protoreflect.Value, fd protoreflect.FieldDescriptor, site Site, at At) (*patchpb.Value, error) {
+	_, whole := siteKind(fd, site)
+	switch whole {
+	case ShapeList:
+		l := pv.List()
+		vs := make([]*patchpb.Value, 0, l.Len())
+		for i := range l.Len() {
+			ev, err := ValueOf(l.Get(i), fd, SiteElement, at.Index("", i))
+			if err != nil {
+				return nil, err
+			}
+			vs = append(vs, ev)
+		}
+		return patchpb.Value_builder{
+			L: patchpb.ListValue_builder{Values: vs}.Build(),
+		}.Build(), nil
+
+	case ShapeMap:
+		var entries []*patchpb.MapEntry
+		var err error
+		pv.Map().Range(func(mk protoreflect.MapKey, mv protoreflect.Value) bool {
+			var k *patchpb.MapKey
+			if k, err = mapKeyOf(mk, fd); err != nil {
+				return false
+			}
+			var v *patchpb.Value
+			if v, err = ValueOf(mv, fd, SiteMapValue, at); err != nil {
+				return false
+			}
+			entries = append(entries, patchpb.MapEntry_builder{Key: k, Value: v}.Build())
+			return true
+		})
+		if err != nil {
+			return nil, err
+		}
+		return patchpb.Value_builder{
+			Map: patchpb.MapValue_builder{Entries: entries}.Build(),
+		}.Build(), nil
+	}
+
+	kind, _ := siteKind(fd, site)
+	b := patchpb.Value_builder{}
+	switch kind {
+	case protoreflect.BoolKind:
+		v := pv.Bool()
+		b.B = &v
+	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind:
+		v := int32(pv.Int())
+		b.I32 = &v
+	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
+		v := pv.Int()
+		b.I64 = &v
+	case protoreflect.Uint32Kind, protoreflect.Fixed32Kind:
+		v := uint32(pv.Uint())
+		b.U32 = &v
+	case protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+		v := pv.Uint()
+		b.U64 = &v
+	case protoreflect.FloatKind:
+		v := float32(pv.Float())
+		b.F32 = &v
+	case protoreflect.DoubleKind:
+		v := pv.Float()
+		b.F64 = &v
+	case protoreflect.StringKind:
+		v := pv.String()
+		b.S = &v
+	case protoreflect.BytesKind:
+		b.X = pv.Bytes()
+	case protoreflect.EnumKind:
+		v := int32(pv.Enum())
+		b.E = &v
+	case protoreflect.MessageKind, protoreflect.GroupKind:
+		mv, err := messageValueOf(pv.Message(), at)
+		if err != nil {
+			return nil, err
+		}
+		b.M = mv
+	default:
+		return nil, Errf(CodeIllegalArm, at, "%v has no Value arm", kind)
+	}
+	return b.Build(), nil
+}
+
+// messageValueOf encodes a message's set fields, keyed by field number. The
+// number is protobuf's stable identity, so a Value built here keeps meaning
+// across a rename.
+func messageValueOf(m protoreflect.Message, at At) (*patchpb.MessageValue, error) {
+	var fields []*patchpb.FieldValue
+	var err error
+	m.Range(func(fd protoreflect.FieldDescriptor, pv protoreflect.Value) bool {
+		var v *patchpb.Value
+		if v, err = ValueOf(pv, fd, SiteField, at.Sub(string(fd.Name()))); err != nil {
+			return false
+		}
+		n := uint32(fd.Number())
+		fields = append(fields, patchpb.FieldValue_builder{
+			Key:   patchpb.Field_builder{Number: &n}.Build(),
+			Value: v,
+		}.Build())
+		return true
+	})
+	if err != nil {
+		return nil, err
+	}
+	return patchpb.MessageValue_builder{Fields: fields}.Build(), nil
+}
+
+func mapKeyOf(mk protoreflect.MapKey, fd protoreflect.FieldDescriptor) (*patchpb.MapKey, error) {
+	b := patchpb.MapKey_builder{}
+	switch fd.MapKey().Kind() {
+	case protoreflect.StringKind:
+		v := mk.String()
+		b.S = &v
+	case protoreflect.BoolKind:
+		v := mk.Bool()
+		b.B = &v
+	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind,
+		protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
+		v := mk.Int()
+		b.I = &v
+	case protoreflect.Uint32Kind, protoreflect.Fixed32Kind,
+		protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+		v := mk.Uint()
+		b.U = &v
+	default:
+		return nil, Errf(CodeIllegalArm, "", "%v is not a legal map key type", fd.MapKey().Kind())
+	}
+	return b.Build(), nil
+}
