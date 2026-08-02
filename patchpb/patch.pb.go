@@ -126,6 +126,20 @@ func (x OnMissing) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
+// ============================= NOT YET STABLE =============================
+//
+// This schema is in use and is being changed in response to that use. Field
+// numbers may move and constructs may be renamed or redefined, IN PLACE — a
+// break does not yet mean a `patchv2`, and it may not increment
+// `Patch.min_reader_revision`, because that number describes a meaning change
+// within a compatible schema and right now the schema itself moves.
+//
+// Pin a specific commit rather than tracking a label. This notice comes off
+// when the schema is declared stable, and the evolution rules below take over
+// from then on.
+//
+// ==========================================================================
+//
 // Patch is a self-identifying patch DOCUMENT: the unit that is stored,
 // transmitted, and applied.
 //

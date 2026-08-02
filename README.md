@@ -155,6 +155,33 @@ buf generate            # regenerate patchpb/, conformancepb/, internal/sample/
 go test ./...
 ```
 
+The workspace has two modules. `proto/` is the published one,
+`buf.build/patch/patch`, and holds nothing but the three schema files.
+`internal/proto/` holds the test fixture `sample.Value` and the corpus schema,
+and is deliberately **unnamed** so that `buf push` cannot publish fixture types
+alongside the specification.
+
+### From the registry
+
+```yaml
+# buf.yaml
+deps:
+  - buf.build/patch/patch
+```
+
+```proto
+import "patch/patch.proto";
+```
+
+While the schema is unstable, **pin a commit** rather than a label — the notice
+at the top of this file says why. A registry commit is immutable and `buf push`
+has no force, so a label is the only thing that moves; pinning one means the
+schema can change under you.
+
+Do not wire `buf breaking --against-registry` into CI yet either. Until the
+schema settles, an intentional break is the normal case and the check would
+fail on every one of them.
+
 The conformance corpus lives in [`conformance/cases`](conformance/cases) as
 textproto rather than Go, so that a second implementation can run the same cases
 without importing the first one's tests.

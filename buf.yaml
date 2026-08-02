@@ -1,14 +1,26 @@
 version: v2
 modules:
-  - path: ./proto
+  # The published schema. Its root is ./proto, so an importer writes
+  # `import "patch/patch.proto"` exactly as this repo does.
+  - path: proto
+    name: buf.build/patch/patch
+
+  # Test fixtures and the corpus schema. Deliberately UNNAMED so that it is
+  # never pushed: sample.Value exists to be patched in tests, and publishing it
+  # would put fixture types in the registry alongside the specification.
+  #
+  # It stays in the same workspace so that conformance/case.proto can still
+  # import patch/patch.proto locally.
+  - path: internal/proto
 lint:
   use:
     - STANDARD
   except:
     # Versioning lives in the package NAME, not a suffix: this schema is
     # `patch`, and a future breaking revision will be `patchv2` in
-    # proto/patchv2/. Within `patch`, compatible evolution is governed by
-    # Patch.min_reader_revision.
+    # proto/patchv2/ — inside this same module, which is why the module name
+    # carries no version either. Within `patch`, compatible evolution is
+    # governed by Patch.min_reader_revision.
     - PACKAGE_VERSION_SUFFIX
 breaking:
   use:

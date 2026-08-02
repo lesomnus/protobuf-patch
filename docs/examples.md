@@ -3,7 +3,9 @@
 Patches written out in ProtoJSON. Every input, output, and error below was
 produced by building the patch, applying it, and capturing what came back.
 
-The target is `sample.Value` from [`proto/sample/`](../proto/sample/):
+The target is `sample.Value` from
+[`internal/proto/sample/`](../internal/proto/sample/) — a test fixture, which is
+why it lives outside the published module:
 
 ```proto
 string s_1 = 109;    string s_2 = 209;    string s_3 = 309;

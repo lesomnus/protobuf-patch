@@ -1,6 +1,7 @@
 version: v2
-inputs:
-  - directory: ./proto
+# No `inputs`: buf generate defaults to ".", which is the workspace, so both
+# modules build together and conformance/case.proto can resolve its import of
+# patch/patch.proto.
 plugins:
   - local: [go, tool, google.golang.org/protobuf/cmd/protoc-gen-go]
     out: .
