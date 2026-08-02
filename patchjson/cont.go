@@ -1,6 +1,8 @@
 package patchjson
 
 import (
+	"sort"
+
 	"github.com/lesomnus/protobuf-patch/patch"
 	"github.com/lesomnus/protobuf-patch/patchpb"
 )
@@ -190,6 +192,25 @@ func resolveSelector(c cont, s *patchpb.Selector, at patch.At) ([]loc, error) {
 				"append addresses an array, and this is an object")
 		}
 		return []loc{{appendArm: true}}, nil
+
+	case patchpb.Selector_EveryEntry_case:
+		if c.isArr {
+			return nil, patch.Errf(patch.CodeIllegalArm, at.Sub("every_entry"),
+				"every_entry addresses a map, and this is an array")
+		}
+		// An object stands in for both a message and a map here, and this
+		// engine's founding rule is that it behaves like the map. So every
+		// member it currently holds is an entry.
+		keys := make([]string, 0, len(c.obj))
+		for k := range c.obj {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		out := make([]loc, 0, len(keys))
+		for _, k := range keys {
+			out = append(out, loc{key: k})
+		}
+		return out, nil
 
 	case patchpb.Selector_OneofMember_case:
 		// A oneof is a protobuf declaration. A JSON object has none, and

@@ -307,3 +307,19 @@ func Oneof(name string) Selector {
 		OneofMember: patchpb.Oneof_builder{Name: proto.String(name)}.Build(),
 	}.Build()}
 }
+
+// EveryEntry selects every entry of a map.
+//
+// It is map-only on purpose: SpanAll already selects every element of a list,
+// and Container addresses a message as a whole, so accepting it there too
+// would give one capability two spellings.
+//
+// An empty map yields no locations, which is a defined empty answer and not a
+// miss — so a Test whose only selector is this against an empty map asserts
+// nothing and is CodeTestVacuous.
+//
+// Use it with Nest to change every entry of a map whose keys the document does
+// not know, which is otherwise inexpressible.
+func EveryEntry() Selector {
+	return Selector{pb: patchpb.Selector_builder{EveryEntry: &patchpb.EveryEntry{}}.Build()}
+}

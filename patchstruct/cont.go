@@ -1,7 +1,9 @@
 package patchstruct
 
 import (
+	"fmt"
 	"reflect"
+	"sort"
 
 	"github.com/lesomnus/protobuf-patch/patch"
 	"github.com/lesomnus/protobuf-patch/patchpb"
@@ -294,6 +296,21 @@ func resolveSelector(c cont, s *patchpb.Selector, at patch.At) ([]loc, error) {
 				"append addresses a slice, and %s is not one", c.describe())
 		}
 		return []loc{{appendArm: true}}, nil
+
+	case patchpb.Selector_EveryEntry_case:
+		if c.kind() != reflect.Map {
+			return nil, patch.Errf(patch.CodeIllegalArm, at.Sub("every_entry"),
+				"every_entry addresses a map, and %s is not one", c.describe())
+		}
+		keys := c.v.MapKeys()
+		sort.Slice(keys, func(i, j int) bool {
+			return fmt.Sprint(keys[i].Interface()) < fmt.Sprint(keys[j].Interface())
+		})
+		out := make([]loc, 0, len(keys))
+		for _, k := range keys {
+			out = append(out, loc{key: k})
+		}
+		return out, nil
 
 	case patchpb.Selector_OneofMember_case:
 		// Go has no oneof. A hand-written struct may model one — an interface,

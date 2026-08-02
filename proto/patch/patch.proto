@@ -96,6 +96,7 @@ option go_package = "github.com/lesomnus/protobuf-patch/patchpb";
 //     field it is applied to (see the tables on `Key`, `MapKey`, and `Value`).
 //   - A `Selector.oneof_member` against a container that is not a message, or
 //     naming a synthetic oneof, or with an empty `name`.
+//   - A `Selector.every_entry` against a container that is not a map.
 //   - A `MapKey` value outside the declared key type's range.
 //   - A `Value.e` that the target's CLOSED enum does not declare.
 //   - `Entry.path` that does not reach an existing container: descending into

@@ -62,6 +62,11 @@ const (
 	// patchproto anyway, for the wrong reason: they are errors on both sides.
 	causeNoOneof = "a oneof is declared by a schema, and a JSON document has none"
 
+	// every_entry is map-only, and an object is this engine's map. So it
+	// accepts one where patchproto, which can see that the container is a
+	// message, refuses.
+	causeObjectIsAMap = "an object stands in for both a message and a map, and behaves like the map"
+
 	// A JSON document does not name its own type, so there is nothing to
 	// compare Patch.message_type against unless the caller supplies a name
 	// with ExpectType. The corpus runner does not, since it is testing the
@@ -70,6 +75,12 @@ const (
 )
 
 var knownDivergences = map[string]string{
+	"every_entry_removes_all_of_them":             causeEmptyContainer,
+	"every_entry_on_an_empty_map_selects_nothing": causeEmptyContainer,
+	"every_entry_still_checks_the_arm":            causeNoTypes,
+	"every_entry_needs_a_map_not_a_message":       causeObjectIsAMap,
+	"a_test_over_an_empty_map_asserts_nothing":    causeEmptyContainer,
+
 	"remove_clears_whichever_member_is_set":          causeNoOneof,
 	"remove_on_a_clear_oneof_is_a_no_op":             causeNoOneof,
 	"assign_overwrites_the_member_that_is_set":       causeNoOneof,

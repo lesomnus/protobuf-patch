@@ -245,6 +245,9 @@ func validateSelector(s *patchpb.Selector, kind any, at At) error {
 	case patchpb.Selector_Range_case:
 		return nil
 
+	case patchpb.Selector_EveryEntry_case:
+		return nil
+
 	case patchpb.Selector_OneofMember_case:
 		if s.GetOneofMember().GetName() == "" {
 			return Errf(CodeFieldNoIdentifier, at.Sub("oneof_member").Sub("name"),

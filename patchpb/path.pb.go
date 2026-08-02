@@ -885,6 +885,15 @@ func (x *Selector) GetOneofMember() *Oneof {
 	return nil
 }
 
+func (x *Selector) GetEveryEntry() *EveryEntry {
+	if x != nil {
+		if x, ok := x.xxx_hidden_Kind.(*selector_EveryEntry); ok {
+			return x.EveryEntry
+		}
+	}
+	return nil
+}
+
 func (x *Selector) SetKey(v *Key) {
 	if v == nil {
 		x.xxx_hidden_Kind = nil
@@ -915,6 +924,14 @@ func (x *Selector) SetOneofMember(v *Oneof) {
 		return
 	}
 	x.xxx_hidden_Kind = &selector_OneofMember{v}
+}
+
+func (x *Selector) SetEveryEntry(v *EveryEntry) {
+	if v == nil {
+		x.xxx_hidden_Kind = nil
+		return
+	}
+	x.xxx_hidden_Kind = &selector_EveryEntry{v}
 }
 
 func (x *Selector) HasKind() bool {
@@ -956,6 +973,14 @@ func (x *Selector) HasOneofMember() bool {
 	return ok
 }
 
+func (x *Selector) HasEveryEntry() bool {
+	if x == nil {
+		return false
+	}
+	_, ok := x.xxx_hidden_Kind.(*selector_EveryEntry)
+	return ok
+}
+
 func (x *Selector) ClearKind() {
 	x.xxx_hidden_Kind = nil
 }
@@ -984,11 +1009,18 @@ func (x *Selector) ClearOneofMember() {
 	}
 }
 
+func (x *Selector) ClearEveryEntry() {
+	if _, ok := x.xxx_hidden_Kind.(*selector_EveryEntry); ok {
+		x.xxx_hidden_Kind = nil
+	}
+}
+
 const Selector_Kind_not_set_case case_Selector_Kind = 0
 const Selector_Key_case case_Selector_Kind = 1
 const Selector_Range_case case_Selector_Kind = 2
 const Selector_Append_case case_Selector_Kind = 3
 const Selector_OneofMember_case case_Selector_Kind = 4
+const Selector_EveryEntry_case case_Selector_Kind = 5
 
 func (x *Selector) WhichKind() case_Selector_Kind {
 	if x == nil {
@@ -1003,6 +1035,8 @@ func (x *Selector) WhichKind() case_Selector_Kind {
 		return Selector_Append_case
 	case *selector_OneofMember:
 		return Selector_OneofMember_case
+	case *selector_EveryEntry:
+		return Selector_EveryEntry_case
 	default:
 		return Selector_Kind_not_set_case
 	}
@@ -1061,6 +1095,27 @@ type Selector_builder struct {
 	// generates for a proto3 `optional` field — is an ERROR, because it would
 	// be a second way to spell a field `Key.field` already addresses.
 	OneofMember *Oneof
+	// Every entry of a map. Legal ONLY against a map.
+	//
+	// A list and a message deliberately do NOT accept it. A `Range` with both
+	// bounds unset already selects every element of a list, and
+	// `Entry.container` already addresses a message as a whole, so accepting
+	// it there too would give one capability two spellings — which this
+	// format avoids everywhere else.
+	//
+	// It resolves against the map as it stands BEFORE the entry runs, like
+	// every selector. An empty map yields NO locations, which is a defined
+	// empty answer rather than a miss: `Entry.on_missing` never applies to
+	// one, and a `test` whose only selector is this against an empty map
+	// resolves to zero locations and is therefore an error — exactly as a
+	// `Range` over an empty list is.
+	//
+	// This exists because a map's keys are DATA. A Patch that has to name
+	// them can only be written by something that already knows them, which
+	// rules out the ordinary case of a stored document that changes every
+	// entry. `nest` under this selector is what makes that expressible at
+	// all.
+	EveryEntry *EveryEntry
 	// -- end of xxx_hidden_Kind
 }
 
@@ -1079,6 +1134,9 @@ func (b0 Selector_builder) Build() *Selector {
 	}
 	if b.OneofMember != nil {
 		x.xxx_hidden_Kind = &selector_OneofMember{b.OneofMember}
+	}
+	if b.EveryEntry != nil {
+		x.xxx_hidden_Kind = &selector_EveryEntry{b.EveryEntry}
 	}
 	return m0
 }
@@ -1158,6 +1216,30 @@ type selector_OneofMember struct {
 	OneofMember *Oneof `protobuf:"bytes,4,opt,name=oneof_member,json=oneofMember,oneof"`
 }
 
+type selector_EveryEntry struct {
+	// Every entry of a map. Legal ONLY against a map.
+	//
+	// A list and a message deliberately do NOT accept it. A `Range` with both
+	// bounds unset already selects every element of a list, and
+	// `Entry.container` already addresses a message as a whole, so accepting
+	// it there too would give one capability two spellings — which this
+	// format avoids everywhere else.
+	//
+	// It resolves against the map as it stands BEFORE the entry runs, like
+	// every selector. An empty map yields NO locations, which is a defined
+	// empty answer rather than a miss: `Entry.on_missing` never applies to
+	// one, and a `test` whose only selector is this against an empty map
+	// resolves to zero locations and is therefore an error — exactly as a
+	// `Range` over an empty list is.
+	//
+	// This exists because a map's keys are DATA. A Patch that has to name
+	// them can only be written by something that already knows them, which
+	// rules out the ordinary case of a stored document that changes every
+	// entry. `nest` under this selector is what makes that expressible at
+	// all.
+	EveryEntry *EveryEntry `protobuf:"bytes,5,opt,name=every_entry,json=everyEntry,oneof"`
+}
+
 func (*selector_Key) isSelector_Kind() {}
 
 func (*selector_Range) isSelector_Kind() {}
@@ -1165,6 +1247,54 @@ func (*selector_Range) isSelector_Kind() {}
 func (*selector_Append) isSelector_Kind() {}
 
 func (*selector_OneofMember) isSelector_Kind() {}
+
+func (*selector_EveryEntry) isSelector_Kind() {}
+
+// EveryEntry selects every entry of a map. It carries no data; it is a message
+// rather than a bool so that it can gain options later without burning a
+// `Selector` arm.
+type EveryEntry struct {
+	state         protoimpl.MessageState `protogen:"opaque.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EveryEntry) Reset() {
+	*x = EveryEntry{}
+	mi := &file_patch_path_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EveryEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EveryEntry) ProtoMessage() {}
+
+func (x *EveryEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_patch_path_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+type EveryEntry_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+}
+
+func (b0 EveryEntry_builder) Build() *EveryEntry {
+	m0 := &EveryEntry{}
+	b, x := &b0, m0
+	_, _ = b, x
+	return m0
+}
 
 // Oneof identifies a oneof of a message by its declared name.
 //
@@ -1183,7 +1313,7 @@ type Oneof struct {
 
 func (x *Oneof) Reset() {
 	*x = Oneof{}
-	mi := &file_patch_path_proto_msgTypes[5]
+	mi := &file_patch_path_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1195,7 +1325,7 @@ func (x *Oneof) String() string {
 func (*Oneof) ProtoMessage() {}
 
 func (x *Oneof) ProtoReflect() protoreflect.Message {
-	mi := &file_patch_path_proto_msgTypes[5]
+	mi := &file_patch_path_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1289,7 +1419,7 @@ type Range struct {
 
 func (x *Range) Reset() {
 	*x = Range{}
-	mi := &file_patch_path_proto_msgTypes[6]
+	mi := &file_patch_path_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1301,7 +1431,7 @@ func (x *Range) String() string {
 func (*Range) ProtoMessage() {}
 
 func (x *Range) ProtoReflect() protoreflect.Message {
-	mi := &file_patch_path_proto_msgTypes[6]
+	mi := &file_patch_path_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1395,7 +1525,7 @@ type Append struct {
 
 func (x *Append) Reset() {
 	*x = Append{}
-	mi := &file_patch_path_proto_msgTypes[7]
+	mi := &file_patch_path_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1407,7 +1537,7 @@ func (x *Append) String() string {
 func (*Append) ProtoMessage() {}
 
 func (x *Append) ProtoReflect() protoreflect.Message {
-	mi := &file_patch_path_proto_msgTypes[7]
+	mi := &file_patch_path_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1445,7 +1575,7 @@ type Location struct {
 
 func (x *Location) Reset() {
 	*x = Location{}
-	mi := &file_patch_path_proto_msgTypes[8]
+	mi := &file_patch_path_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1457,7 +1587,7 @@ func (x *Location) String() string {
 func (*Location) ProtoMessage() {}
 
 func (x *Location) ProtoReflect() protoreflect.Message {
-	mi := &file_patch_path_proto_msgTypes[8]
+	mi := &file_patch_path_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1616,7 +1746,7 @@ func (b0 Location_builder) Build() *Location {
 type case_Location_Origin protoreflect.FieldNumber
 
 func (x case_Location_Origin) String() string {
-	md := file_patch_path_proto_msgTypes[8].Descriptor()
+	md := file_patch_path_proto_msgTypes[9].Descriptor()
 	if x == 0 {
 		return "not set"
 	}
@@ -1652,7 +1782,7 @@ type SameContainer struct {
 
 func (x *SameContainer) Reset() {
 	*x = SameContainer{}
-	mi := &file_patch_path_proto_msgTypes[9]
+	mi := &file_patch_path_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1664,7 +1794,7 @@ func (x *SameContainer) String() string {
 func (*SameContainer) ProtoMessage() {}
 
 func (x *SameContainer) ProtoReflect() protoreflect.Message {
-	mi := &file_patch_path_proto_msgTypes[9]
+	mi := &file_patch_path_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1709,14 +1839,18 @@ const file_patch_path_proto_rawDesc = "" +
 	"\x04kind\".\n" +
 	"\x04Path\x12&\n" +
 	"\bsegments\x18\x01 \x03(\v2\n" +
-	".patch.KeyR\bsegments\"\xb4\x01\n" +
+	".patch.KeyR\bsegments\"\xea\x01\n" +
 	"\bSelector\x12\x1e\n" +
 	"\x03key\x18\x01 \x01(\v2\n" +
 	".patch.KeyH\x00R\x03key\x12$\n" +
 	"\x05range\x18\x02 \x01(\v2\f.patch.RangeH\x00R\x05range\x12'\n" +
 	"\x06append\x18\x03 \x01(\v2\r.patch.AppendH\x00R\x06append\x121\n" +
-	"\foneof_member\x18\x04 \x01(\v2\f.patch.OneofH\x00R\voneofMemberB\x06\n" +
-	"\x04kind\"\x1b\n" +
+	"\foneof_member\x18\x04 \x01(\v2\f.patch.OneofH\x00R\voneofMember\x124\n" +
+	"\vevery_entry\x18\x05 \x01(\v2\x11.patch.EveryEntryH\x00R\n" +
+	"everyEntryB\x06\n" +
+	"\x04kind\"\f\n" +
+	"\n" +
+	"EveryEntry\"\x1b\n" +
 	"\x05Oneof\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"/\n" +
 	"\x05Range\x12\x14\n" +
@@ -1731,35 +1865,37 @@ const file_patch_path_proto_rawDesc = "" +
 	"\x06origin\"\x0f\n" +
 	"\rSameContainerB1Z*github.com/lesomnus/protobuf-patch/patchpb\x92\x03\x02\b\x01b\beditionsp\xe8\a"
 
-var file_patch_path_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_patch_path_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_patch_path_proto_goTypes = []any{
 	(*Key)(nil),           // 0: patch.Key
 	(*Field)(nil),         // 1: patch.Field
 	(*MapKey)(nil),        // 2: patch.MapKey
 	(*Path)(nil),          // 3: patch.Path
 	(*Selector)(nil),      // 4: patch.Selector
-	(*Oneof)(nil),         // 5: patch.Oneof
-	(*Range)(nil),         // 6: patch.Range
-	(*Append)(nil),        // 7: patch.Append
-	(*Location)(nil),      // 8: patch.Location
-	(*SameContainer)(nil), // 9: patch.SameContainer
+	(*EveryEntry)(nil),    // 5: patch.EveryEntry
+	(*Oneof)(nil),         // 6: patch.Oneof
+	(*Range)(nil),         // 7: patch.Range
+	(*Append)(nil),        // 8: patch.Append
+	(*Location)(nil),      // 9: patch.Location
+	(*SameContainer)(nil), // 10: patch.SameContainer
 }
 var file_patch_path_proto_depIdxs = []int32{
 	1,  // 0: patch.Key.field:type_name -> patch.Field
 	2,  // 1: patch.Key.map_key:type_name -> patch.MapKey
 	0,  // 2: patch.Path.segments:type_name -> patch.Key
 	0,  // 3: patch.Selector.key:type_name -> patch.Key
-	6,  // 4: patch.Selector.range:type_name -> patch.Range
-	7,  // 5: patch.Selector.append:type_name -> patch.Append
-	5,  // 6: patch.Selector.oneof_member:type_name -> patch.Oneof
-	3,  // 7: patch.Location.path:type_name -> patch.Path
-	9,  // 8: patch.Location.same_container:type_name -> patch.SameContainer
-	0,  // 9: patch.Location.key:type_name -> patch.Key
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	7,  // 4: patch.Selector.range:type_name -> patch.Range
+	8,  // 5: patch.Selector.append:type_name -> patch.Append
+	6,  // 6: patch.Selector.oneof_member:type_name -> patch.Oneof
+	5,  // 7: patch.Selector.every_entry:type_name -> patch.EveryEntry
+	3,  // 8: patch.Location.path:type_name -> patch.Path
+	10, // 9: patch.Location.same_container:type_name -> patch.SameContainer
+	0,  // 10: patch.Location.key:type_name -> patch.Key
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_patch_path_proto_init() }
@@ -1783,8 +1919,9 @@ func file_patch_path_proto_init() {
 		(*selector_Range)(nil),
 		(*selector_Append)(nil),
 		(*selector_OneofMember)(nil),
+		(*selector_EveryEntry)(nil),
 	}
-	file_patch_path_proto_msgTypes[8].OneofWrappers = []any{
+	file_patch_path_proto_msgTypes[9].OneofWrappers = []any{
 		(*location_Path)(nil),
 		(*location_SameContainer)(nil),
 	}
@@ -1794,7 +1931,7 @@ func file_patch_path_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_patch_path_proto_rawDesc), len(file_patch_path_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

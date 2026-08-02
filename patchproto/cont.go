@@ -1,6 +1,8 @@
 package patchproto
 
 import (
+	"sort"
+
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/lesomnus/protobuf-patch/patch"
@@ -277,6 +279,22 @@ func resolveSelector(c cont, s *patchpb.Selector, isTest bool, at patch.At) ([]l
 				"append addresses a list, and %s is not one", c.describe())
 		}
 		return []loc{{appendArm: true}}, nil
+
+	case patchpb.Selector_EveryEntry_case:
+		if !c.isMap() {
+			return nil, patch.Errf(patch.CodeIllegalArm, at.Sub("every_entry"),
+				"every_entry addresses a map, and %s is not one", c.describe())
+		}
+		out := make([]loc, 0, c.mp.Len())
+		c.mp.Range(func(k protoreflect.MapKey, _ protoreflect.Value) bool {
+			out = append(out, loc{key: k})
+			return true
+		})
+		// Map iteration order is unspecified and targets are an unordered set,
+		// so the result is the same either way; sorting only makes the position
+		// named in an error deterministic.
+		sort.Slice(out, func(i, j int) bool { return out[i].key.String() < out[j].key.String() })
+		return out, nil
 
 	case patchpb.Selector_OneofMember_case:
 		return resolveOneof(c, s.GetOneofMember(), isTest, at.Sub("oneof_member"))

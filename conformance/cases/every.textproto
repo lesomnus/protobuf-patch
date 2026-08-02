@@ -1,0 +1,167 @@
+# A map's keys are DATA. Before every_entry, a Patch touching every entry had
+# to name them, which only something that already knows them can write — so the
+# ordinary case of a stored document that changes every entry was inexpressible.
+#
+# It is map-only: SpanAll already covers a list, and Entry.container already
+# covers a message.
+
+cases {
+  name: "every_entry_assigns_to_all_of_them"
+  doc: "Without naming a single key."
+  input { m_s_s { key: "a" value: "1" } m_s_s { key: "b" value: "2" } }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_s_s" } } }
+      targets { selectors { every_entry {} } }
+      assign { value { s: "same" } }
+    } }
+  }
+  output { m_s_s { key: "a" value: "same" } m_s_s { key: "b" value: "same" } }
+}
+
+cases {
+  name: "every_entry_removes_all_of_them"
+  doc: "The same as emptying the map with container scope, reached the other way."
+  input { m_s_s { key: "a" value: "1" } m_s_s { key: "b" value: "2" } }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_s_s" } } }
+      targets { selectors { every_entry {} } }
+      remove {}
+    } }
+  }
+  output {}
+}
+
+cases {
+  name: "every_entry_on_an_empty_map_selects_nothing"
+  doc: "A defined empty answer, not a miss: on_missing is not involved and the entry is a no-op."
+  input { s_1: "untouched" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_s_s" } } }
+      targets { selectors { every_entry {} } }
+      remove {}
+    } }
+  }
+  output { s_1: "untouched" }
+}
+
+cases {
+  name: "every_entry_resolves_before_the_entry_runs"
+  doc: "Like every selector. The entries it selects are the ones present when the entry began."
+  input { m_s_s { key: "a" value: "1" } }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_s_s" } } }
+      targets { selectors { every_entry {} } }
+      assign { value { s: "rewritten" } }
+    } }
+  }
+  output { m_s_s { key: "a" value: "rewritten" } }
+}
+
+cases {
+  name: "every_entry_and_a_named_key_are_the_same_target"
+  doc: "Targets are a set, and every_entry already selected that key."
+  input { m_s_s { key: "a" value: "1" } }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_s_s" } } }
+      targets {
+        selectors { every_entry {} }
+        selectors { key { map_key { s: "a" } } }
+      }
+      assign { value { s: "x" } }
+    } }
+  }
+  error: "duplicate target"
+}
+
+cases {
+  name: "every_entry_still_checks_the_arm"
+  doc: "Selecting many positions does not loosen the typing rule for any of them."
+  input { m_s_s { key: "a" value: "1" } }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_s_s" } } }
+      targets { selectors { every_entry {} } }
+      assign { value { i32: 1 } }
+    } }
+  }
+  error: "illegal arm for target"
+}
+
+cases {
+  name: "every_entry_needs_a_map_not_a_list"
+  doc: "A Range with both bounds unset already selects every element of a list; one capability, one spelling."
+  input { r_s_1: "a" r_s_1: "b" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets { selectors { every_entry {} } }
+      remove {}
+    } }
+  }
+  error: "illegal arm for target"
+}
+
+cases {
+  name: "every_entry_needs_a_map_not_a_message"
+  doc: "Entry.container already addresses a message as a whole."
+  input { s_1: "x" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { every_entry {} } }
+      remove {}
+    } }
+  }
+  error: "illegal arm for target"
+}
+
+cases {
+  name: "a_test_over_an_empty_map_asserts_nothing"
+  doc: "Zero locations, so the assertion would pass without being evaluated — the same rule that catches a Range over an empty list."
+  input {}
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_s_s" } } }
+      targets { selectors { every_entry {} } }
+      test { value { s: "anything" } }
+    } }
+  }
+  error: "test asserts nothing"
+}
+
+cases {
+  name: "nest_under_every_entry_changes_every_value"
+  doc: "The reason the selector exists: a stored document that edits inside every entry of a map whose keys it does not know."
+  input {
+    m_s_m { key: "a" value { s_1: "one" } }
+    m_s_m { key: "b" value { s_1: "two" } }
+  }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_s_m" } } }
+      targets { selectors { every_entry {} } }
+      nest { delta { entries {
+        targets { selectors { key { field { name: "s_2" } } } }
+        assign { value { s: "added" } }
+      } } }
+    } }
+  }
+  output {
+    m_s_m { key: "a" value { s_1: "one" s_2: "added" } }
+    m_s_m { key: "b" value { s_1: "two" s_2: "added" } }
+  }
+}

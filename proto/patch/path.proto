@@ -230,8 +230,35 @@ message Selector {
     // generates for a proto3 `optional` field — is an ERROR, because it would
     // be a second way to spell a field `Key.field` already addresses.
     Oneof oneof_member = 4;
+
+    // Every entry of a map. Legal ONLY against a map.
+    //
+    // A list and a message deliberately do NOT accept it. A `Range` with both
+    // bounds unset already selects every element of a list, and
+    // `Entry.container` already addresses a message as a whole, so accepting
+    // it there too would give one capability two spellings — which this
+    // format avoids everywhere else.
+    //
+    // It resolves against the map as it stands BEFORE the entry runs, like
+    // every selector. An empty map yields NO locations, which is a defined
+    // empty answer rather than a miss: `Entry.on_missing` never applies to
+    // one, and a `test` whose only selector is this against an empty map
+    // resolves to zero locations and is therefore an error — exactly as a
+    // `Range` over an empty list is.
+    //
+    // This exists because a map's keys are DATA. A Patch that has to name
+    // them can only be written by something that already knows them, which
+    // rules out the ordinary case of a stored document that changes every
+    // entry. `nest` under this selector is what makes that expressible at
+    // all.
+    EveryEntry every_entry = 5;
   }
 }
+
+// EveryEntry selects every entry of a map. It carries no data; it is a message
+// rather than a bool so that it can gain options later without burning a
+// `Selector` arm.
+message EveryEntry {}
 
 // Oneof identifies a oneof of a message by its declared name.
 //

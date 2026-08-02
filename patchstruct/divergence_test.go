@@ -29,8 +29,9 @@ type Mirror struct {
 
 	R_S_1 []string `json:"r_s_1"`
 
-	M_S_S map[string]string `json:"m_s_s"`
-	M_1   *Mirror           `json:"m_1"`
+	M_S_S map[string]string  `json:"m_s_s"`
+	M_S_M map[string]*Mirror `json:"m_s_m"`
+	M_1   *Mirror            `json:"m_1"`
 
 	// A pointer, because opt_f64 declares explicit presence and that is how
 	// this engine spells it. Carried so that the equality rules the schema
@@ -215,6 +216,18 @@ func sameMirror(a, b Mirror) bool {
 		}
 		a.M_1, b.M_1 = nil, nil
 	}
+
+	if len(a.M_S_M) != len(b.M_S_M) {
+		return false
+	}
+	for k, av := range a.M_S_M {
+		bv, has := b.M_S_M[k]
+		if !has || !sameMirror(*av, *bv) {
+			return false
+		}
+	}
+	a.M_S_M, b.M_S_M = nil, nil
+
 	return reflect.DeepEqual(a, b)
 }
 
@@ -237,6 +250,14 @@ func normalize(m Mirror) Mirror {
 	if len(m.M_S_S) == 0 {
 		m.M_S_S = nil
 	}
+	if len(m.M_S_M) == 0 {
+		m.M_S_M = nil
+	} else {
+		for k, v := range m.M_S_M {
+			inner := normalize(*v)
+			m.M_S_M[k] = &inner
+		}
+	}
 	if m.M_1 != nil {
 		inner := normalize(*m.M_1)
 		m.M_1 = &inner
@@ -258,6 +279,7 @@ func toMirror(v any) (Mirror, bool) {
 		GetM_1() *sample.Value
 		HasOptF64() bool
 		GetOptF64() float64
+		GetMSM() map[string]*sample.Value
 	}
 	if v == nil {
 		return Mirror{}, true
@@ -291,6 +313,7 @@ func mirrorOf(sv interface {
 	GetMSS() map[string]string
 	HasOptF64() bool
 	GetOptF64() float64
+	GetMSM() map[string]*sample.Value
 }) Mirror {
 	m := Mirror{
 		S_1:   sv.GetS_1(),
@@ -304,6 +327,16 @@ func mirrorOf(sv interface {
 	if sv.HasOptF64() {
 		v := sv.GetOptF64()
 		m.Opt_F64 = &v
+	}
+	if src := sv.GetMSM(); len(src) > 0 {
+		m.M_S_M = make(map[string]*Mirror, len(src))
+		for k, v := range src {
+			inner, ok := toMirror(v)
+			if !ok {
+				return Mirror{}
+			}
+			m.M_S_M[k] = &inner
+		}
 	}
 	return m
 }
