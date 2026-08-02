@@ -286,3 +286,24 @@ func buildPath(keys []Keyer) (*patchpb.Path, error) {
 	}
 	return patchpb.Path_builder{Segments: segs}.Build(), nil
 }
+
+// Oneof selects the member of a message's oneof that is currently SET.
+//
+// It is a Selector rather than a Keyer because a oneof names zero or one
+// location, and Keyer promises exactly one — which is why it may not appear in
+// a Path or a Location.
+//
+// Nothing set selects nothing, so remove on an already-clear oneof is a no-op
+// rather than a failure, exactly as an empty Span is. Under Test the oneof
+// itself is read, so Exists(false) asserts that no member is set.
+//
+// Prefer this to enumerating the members: an enumeration silently stops
+// covering a member added to the oneof later, and this does not.
+func Oneof(name string) Selector {
+	if name == "" {
+		return Selector{err: Errf(CodeFieldNoIdentifier, "", "empty oneof name")}
+	}
+	return Selector{pb: patchpb.Selector_builder{
+		OneofMember: patchpb.Oneof_builder{Name: proto.String(name)}.Build(),
+	}.Build()}
+}

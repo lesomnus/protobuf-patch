@@ -568,6 +568,9 @@ func allocFor(c cont, l loc) func() protoreflect.Value {
 func describeLoc(c cont, l loc) string {
 	switch {
 	case c.isMsg():
+		if l.od != nil {
+			return string(l.od.FullName()) + " (oneof)"
+		}
 		if l.fd == nil {
 			return c.describe()
 		}

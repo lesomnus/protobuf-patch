@@ -87,6 +87,26 @@ func (x OnMissing) Number() protoreflect.EnumNumber {
 // mode. An applier that mutates a caller-owned message in place cannot honor
 // this contract and MUST NOT be offered as the primary interface.
 //
+// RESOURCE BOUNDS. A Patch nests without limit in two independent places:
+// `nest` chains Deltas, and a `Value` literal nests through `m`, `l`, and
+// `map`. Both are recursive, so a document of a few tens of kilobytes can
+// describe hundreds of thousands of levels, and a reader that follows them
+// naively will spend memory and stack far out of proportion to the input.
+//
+// An implementation MUST bound the nesting depth it will follow, in both
+// places, and MUST fail closed when a document exceeds the bound. The bound
+// itself is implementation-defined: this schema fixes no number, because the
+// right one depends on the reader's stack and on what its producers
+// legitimately send.
+//
+// A consequence, stated here so that it is not a surprise: a document one
+// reader accepts, another may refuse. That is the same shape as
+// `min_reader_revision`, and it only ever moves toward refusal — never toward
+// a reader applying a document it did not fully process.
+//
+// `Entry.path` and `Targets.selectors` are repeated rather than recursive.
+// They are linear in the size of the document and need no such bound.
+//
 // UNKNOWN FIELDS ON THE TARGET. Fields present on the target's wire form but
 // not declared by its descriptor are not addressable by any `Key`, and are not
 // part of the container for `remove` or `assign` at container scope: they MUST
@@ -127,6 +147,8 @@ func (x OnMissing) Number() protoreflect.EnumNumber {
 //     absent (see `Field`).
 //   - A selector, key, or value arm that is not legal for the container or
 //     field it is applied to (see the tables on `Key`, `MapKey`, and `Value`).
+//   - A `Selector.oneof_member` against a container that is not a message, or
+//     naming a synthetic oneof, or with an empty `name`.
 //   - A `MapKey` value outside the declared key type's range.
 //   - A `Value.e` that the target's CLOSED enum does not declare.
 //   - `Entry.path` that does not reach an existing container: descending into
@@ -441,6 +463,31 @@ func (b0 Delta_builder) Build() *Delta {
 //	Never mutates. `on_missing` may not be set on a `test`, and a `test` whose
 //	selectors resolve to zero locations is an error, so a test can never pass
 //	vacuously.
+//
+//	EQUALITY, used by `want.value`, is defined as follows. It is the only
+//	comparison the format performs, so it is spelled out rather than left to
+//	whatever each implementation's language calls equality.
+//	  - Kind and declared type must match first: comparing across types is an
+//	    error, not an unequal answer.
+//	  - Integers, booleans, and strings: equal values.
+//	  - `x`: equal byte sequences.
+//	  - `e`: equal numbers, in the same enum type.
+//	  - `f32`/`f64`: equal IEEE values, EXCEPT that NaN EQUALS NaN. A test
+//	    asserts what a document holds, not an arithmetic predicate; under IEEE
+//	    inequality a Patch could `assign` a NaN and then be unable to assert
+//	    the value it had just written. -0.0 and +0.0 are equal.
+//	  - `m`: EXACT, not subset. Every field set on the target must appear in
+//	    `fields` with an equal value, and every field in `fields` must be set
+//	    on the target. A field absent from `fields` therefore asserts that the
+//	    target does not have it set. For a subset assertion, test the fields
+//	    individually, or `nest` a Delta of tests.
+//	  - `l`: equal lengths, and elementwise equal in order.
+//	  - `map`: equal key sets, and equal values under each key.
+//	  - UNKNOWN FIELDS ON THE TARGET TAKE NO PART, at any depth. They are not
+//	    addressable and are preserved verbatim, so a Value has no way to
+//	    mention one; counting them would make every `test` against a message
+//	    carrying any fail, with no Value that could ever pass.
+//
 //	`want.value`   the target exists and equals the value. Kind and declared
 //	               type must match exactly; a missing target fails.
 //	`want.exists`  true: the target is present. false: it is absent.

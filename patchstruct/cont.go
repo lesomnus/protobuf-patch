@@ -294,6 +294,13 @@ func resolveSelector(c cont, s *patchpb.Selector, at patch.At) ([]loc, error) {
 				"append addresses a slice, and %s is not one", c.describe())
 		}
 		return []loc{{appendArm: true}}, nil
+
+	case patchpb.Selector_OneofMember_case:
+		// Go has no oneof. A hand-written struct may model one — an interface,
+		// a tag field, a set of pointers — but the format cannot know which,
+		// and picking one would be guessing.
+		return nil, patch.Errf(patch.CodeIllegalArm, at.Sub("oneof_member"),
+			"a Go struct has no oneof to address")
 	}
 	return nil, patch.Errf(patch.CodeMissingOneof, at.Sub("kind"), "a selector must name something")
 }

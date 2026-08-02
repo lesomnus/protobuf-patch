@@ -190,6 +190,12 @@ func resolveSelector(c cont, s *patchpb.Selector, at patch.At) ([]loc, error) {
 				"append addresses an array, and this is an object")
 		}
 		return []loc{{appendArm: true}}, nil
+
+	case patchpb.Selector_OneofMember_case:
+		// A oneof is a protobuf declaration. A JSON object has none, and
+		// guessing which of its members is "set" would be inventing a schema.
+		return nil, patch.Errf(patch.CodeIllegalArm, at.Sub("oneof_member"),
+			"a oneof is declared by a schema, and a JSON document has none")
 	}
 	return nil, patch.Errf(patch.CodeMissingOneof, at.Sub("kind"), "a selector must name something")
 }

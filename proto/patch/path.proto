@@ -193,7 +193,56 @@ message Selector {
     // smuggled into `Key.index` as a magic value, which is what forces
     // negative indices to mean different things in different operations.
     Append append = 3;
+
+    // The member of a `oneof` that is currently SET. Legal ONLY against a
+    // message.
+    //
+    // A oneof names ZERO OR ONE location, which is why it belongs here and
+    // not in `Key`. `Key` promises exactly one, and forcing a oneof into that
+    // promise is what made `assign` undefined: there is no way to say which
+    // member a value is meant for when two members share a type. As a
+    // Selector nothing new has to be defined — it resolves to the set member
+    // or to nothing, and every operation already says what it does with zero
+    // or one location:
+    //
+    //	remove     clear the set member. Nothing set selects nothing, so the
+    //	           entry is a no-op, exactly as an empty `Range` is.
+    //	assign     overwrite the set member in place. The arm must match THAT
+    //	           member's type; the document does not get to choose which
+    //	           member is written.
+    //	insert     the set member is occupied, so this fails. Nothing set
+    //	           selects nothing.
+    //	move/copy  write to the set member.
+    //	nest       descend into the set member, which must be a container.
+    //	test       reads the ONEOF ITSELF rather than the member, so that
+    //	           `exists = false` is satisfiable. This is the carve-out
+    //	           `test` already has for a missing target, applied here:
+    //	           `want.exists` reports whether any member is set, and
+    //	           `want.value` compares against the set member and fails when
+    //	           there is none.
+    //
+    // Addressing the oneof instead of enumerating its members is also what
+    // keeps a stored Patch correct when a member is ADDED later: an
+    // enumeration silently stops covering the new one.
+    //
+    // A name the message does not declare as a oneof is a MISSING TARGET,
+    // like an undeclared field. A SYNTHETIC oneof — the one protobuf
+    // generates for a proto3 `optional` field — is an ERROR, because it would
+    // be a second way to spell a field `Key.field` already addresses.
+    Oneof oneof_member = 4;
   }
+}
+
+// Oneof identifies a oneof of a message by its declared name.
+//
+// A oneof has no field number, so there is nothing to pin a name against and
+// no equivalent of the integrity check `Field` carries. It is a message rather
+// than a bare string so that it can gain options later without burning a
+// `Selector` arm.
+message Oneof {
+  // The oneof's declared name, e.g. "source". Required; the empty string is
+  // not a legal oneof name.
+  string name = 1;
 }
 
 // Range selects the list elements in the half-open interval [begin, end).

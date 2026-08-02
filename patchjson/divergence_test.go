@@ -56,6 +56,12 @@ const (
 	// equals NaN is therefore unreachable here rather than contradicted.
 	causeNoNaN = "JSON has no NaN; ProtoJSON writes it as the string \"NaN\", which no float arm matches"
 
+	// A oneof is a protobuf declaration. A JSON object has none, so there is
+	// no way to know which member is "set" — and inventing one would be
+	// inventing a schema. Note that two of the oneof cases agree with
+	// patchproto anyway, for the wrong reason: they are errors on both sides.
+	causeNoOneof = "a oneof is declared by a schema, and a JSON document has none"
+
 	// A JSON document does not name its own type, so there is nothing to
 	// compare Patch.message_type against unless the caller supplies a name
 	// with ExpectType. The corpus runner does not, since it is testing the
@@ -64,6 +70,18 @@ const (
 )
 
 var knownDivergences = map[string]string{
+	"remove_clears_whichever_member_is_set":          causeNoOneof,
+	"remove_on_a_clear_oneof_is_a_no_op":             causeNoOneof,
+	"assign_overwrites_the_member_that_is_set":       causeNoOneof,
+	"test_exists_false_holds_on_a_clear_oneof":       causeNoOneof,
+	"test_exists_true_holds_when_a_member_is_set":    causeNoOneof,
+	"test_value_fails_on_a_clear_oneof":              causeNoOneof,
+	"nest_descends_into_the_member_that_is_set":      causeNoOneof,
+	"insert_refuses_an_occupied_oneof":               causeNoOneof,
+	"an_undeclared_oneof_name_is_a_missing_target":   causeNoOneof,
+	"an_undeclared_oneof_name_can_be_skipped":        causeNoOneof,
+	"a_oneof_and_its_set_member_are_the_same_target": causeNoOneof,
+
 	"nan_equals_nan":                     causeNoNaN,
 	"nan_nested_in_a_message_equals_nan": causeNoNaN,
 

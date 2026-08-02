@@ -118,6 +118,18 @@ message Value {
   // Explicit presence is required: a field with implicit presence may only use
   // an open enum, since the implicit default has to be representable.
   Closed closed_1 = 119 [features.field_presence = EXPLICIT];
+
+  // A oneof, so that Selector.oneof_member has something to address. Two of
+  // the members share a type on purpose: that is the case which makes
+  // "assign to the oneof, and let the value pick the member" undecidable, and
+  // it is why a oneof is a Selector resolving to the member already set
+  // rather than a Key naming the oneof itself.
+  oneof source {
+    string src_s = 121;
+    string src_s_too = 122;
+    int32 src_i32 = 123;
+    Value src_m = 124;
+  }
 }
 
 enum Level {

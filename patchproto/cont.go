@@ -66,11 +66,20 @@ type loc struct {
 	// A declared message field is never an empty slot: it always exists, and
 	// whether it is set is presence, which is what `exists` reports.
 	emptySlot bool
+
+	// od marks the oneof itself, with no member set. Only a test ever sees
+	// one: for every other kind an unset oneof resolves to no location at all,
+	// because there is nothing to act on and no way to say which member a
+	// value would be for. A test needs the position so that exists=false has
+	// something to report about.
+	od protoreflect.OneofDescriptor
 }
 
 // key returns a comparable identity for duplicate detection.
 func (l loc) ident() any {
 	switch {
+	case l.od != nil:
+		return l.od.FullName()
 	case l.fd != nil:
 		return l.fd.Number()
 	case l.appendArm:
@@ -198,7 +207,7 @@ func expand(c cont, ts *patchpb.Targets, e *patchpb.Entry, at patch.At) ([]loc, 
 
 	for i, s := range ts.GetSelectors() {
 		sat := at.Index("selectors", i)
-		locs, err := resolveSelector(c, s, sat)
+		locs, err := resolveSelector(c, s, isTest, sat)
 		if err != nil {
 			return nil, err
 		}
@@ -241,7 +250,7 @@ func needsContent(kind any) bool {
 // A Range that matches nothing returns no locations rather than an absent one:
 // an empty range is a defined answer, not a miss, so on_missing never applies
 // to it.
-func resolveSelector(c cont, s *patchpb.Selector, at patch.At) ([]loc, error) {
+func resolveSelector(c cont, s *patchpb.Selector, isTest bool, at patch.At) ([]loc, error) {
 	switch s.WhichKind() {
 	case patchpb.Selector_Key_case:
 		l, err := resolveKey(c, s.GetKey(), at.Sub("key"))
@@ -268,6 +277,9 @@ func resolveSelector(c cont, s *patchpb.Selector, at patch.At) ([]loc, error) {
 				"append addresses a list, and %s is not one", c.describe())
 		}
 		return []loc{{appendArm: true}}, nil
+
+	case patchpb.Selector_OneofMember_case:
+		return resolveOneof(c, s.GetOneofMember(), isTest, at.Sub("oneof_member"))
 	}
 	return nil, patch.Errf(patch.CodeMissingOneof, at.Sub("kind"), "a selector must name something")
 }
@@ -316,4 +328,43 @@ func resolveKey(c cont, k *patchpb.Key, at patch.At) (loc, error) {
 		// entry is in it. That is what lets assign create one.
 		return loc{key: mk, emptySlot: !c.mp.Has(mk)}, nil
 	}
+}
+
+// resolveOneof turns a oneof selector into the member currently set.
+//
+// It names zero or one location, which is the whole reason it is a Selector:
+// as a Key it would have had to promise exactly one, and then `assign` would
+// have needed the Value to say which member it was for — undecidable as soon
+// as two members share a type.
+//
+// An unset oneof resolves to nothing for every kind but `test`, which reads
+// the oneof itself so that exists=false is satisfiable. That is the carve-out
+// `test` already has for a missing target, applied here.
+func resolveOneof(c cont, o *patchpb.Oneof, isTest bool, at patch.At) ([]loc, error) {
+	if !c.isMsg() {
+		return nil, patch.Errf(patch.CodeIllegalArm, at,
+			"a oneof lives in a message, and %s is not one", c.describe())
+	}
+
+	md := c.msg.Descriptor()
+	od := md.Oneofs().ByName(protoreflect.Name(o.GetName()))
+	if od == nil {
+		// Like a field the message does not declare.
+		return []loc{{noSlot: true}}, nil
+	}
+	if od.IsSynthetic() {
+		// protobuf generates one of these per proto3 `optional` field.
+		// Addressing it would be a second way to spell what Key.field already
+		// says, and the format keeps one spelling per capability.
+		return nil, patch.Errf(patch.CodeIllegalArm, at,
+			"%s is the synthetic oneof of an optional field; address the field itself", od.FullName())
+	}
+
+	if fd := c.msg.WhichOneof(od); fd != nil {
+		return []loc{{fd: fd}}, nil
+	}
+	if isTest {
+		return []loc{{od: od}}, nil
+	}
+	return nil, nil
 }

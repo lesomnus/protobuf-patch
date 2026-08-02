@@ -1,0 +1,197 @@
+# A oneof names ZERO OR ONE location, which is why Selector.oneof_member is a
+# selector and not a key. As a selector nothing new has to be defined: every
+# operation already says what it does with zero or one location.
+#
+# sample.Value declares `oneof source { src_s, src_s_too, src_i32, src_m }`.
+# Two members share a type on purpose — that is the case which makes "assign to
+# the oneof and let the value pick the member" undecidable.
+
+cases {
+  name: "remove_clears_whichever_member_is_set"
+  doc: "The point of addressing the oneof rather than enumerating its members: the document does not have to know which one is set."
+  input { src_s_too: "set" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { oneof_member { name: "source" } } }
+      remove {}
+    } }
+  }
+  output {}
+}
+
+cases {
+  name: "remove_on_a_clear_oneof_is_a_no_op"
+  doc: "Nothing set selects nothing, which is a defined empty answer rather than a miss — exactly as an empty Range is. on_missing is not involved."
+  input { s_1: "untouched" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { oneof_member { name: "source" } } }
+      remove {}
+    } }
+  }
+  output { s_1: "untouched" }
+}
+
+cases {
+  name: "assign_overwrites_the_member_that_is_set"
+  doc: "The arm must match THAT member's type; the document does not choose which member is written."
+  input { src_s: "before" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { oneof_member { name: "source" } } }
+      assign { value { s: "after" } }
+    } }
+  }
+  output { src_s: "after" }
+}
+
+cases {
+  name: "assign_to_a_oneof_still_checks_the_arm"
+  doc: "Resolving through a oneof does not loosen the typing rule: the set member is int32 and the value is a string."
+  input { src_i32: 1 }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { oneof_member { name: "source" } } }
+      assign { value { s: "no" } }
+    } }
+  }
+  error: "illegal arm for target"
+}
+
+cases {
+  name: "test_exists_false_holds_on_a_clear_oneof"
+  doc: "A test reads the oneof itself rather than the member, which is what makes absence assertable. Without that carve-out this would be a test resolving to zero locations, which is an error."
+  input { s_1: "x" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { oneof_member { name: "source" } } }
+      test { exists: false }
+    } }
+  }
+  output { s_1: "x" }
+}
+
+cases {
+  name: "test_exists_true_holds_when_a_member_is_set"
+  doc: "Which member does not matter."
+  input { src_i32: 7 }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { oneof_member { name: "source" } } }
+      test { exists: true }
+    } }
+  }
+  output { src_i32: 7 }
+}
+
+cases {
+  name: "test_value_fails_on_a_clear_oneof"
+  doc: "There is nothing to compare against, and a test never passes for want of a target."
+  input {}
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { oneof_member { name: "source" } } }
+      test { value { s: "anything" } }
+    } }
+  }
+  error: "test failed"
+}
+
+cases {
+  name: "nest_descends_into_the_member_that_is_set"
+  doc: "The set member is a container here, so the inner Delta applies to it."
+  input { src_m { s_1: "inner" } }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { oneof_member { name: "source" } } }
+      nest { delta { entries {
+        targets { selectors { key { field { name: "s_2" } } } }
+        assign { value { s: "added" } }
+      } } }
+    } }
+  }
+  output { src_m { s_1: "inner" s_2: "added" } }
+}
+
+cases {
+  name: "insert_refuses_an_occupied_oneof"
+  doc: "insert creates without overwriting, and a set member is occupied."
+  input { src_s: "taken" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { oneof_member { name: "source" } } }
+      insert { value { s: "no" } }
+    } }
+  }
+  error: "target already has a value"
+}
+
+cases {
+  name: "an_undeclared_oneof_name_is_a_missing_target"
+  doc: "Like a field the message does not declare, so on_missing governs it."
+  input { s_1: "x" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { oneof_member { name: "no_such_oneof" } } }
+      remove {}
+    } }
+  }
+  error: "target does not exist"
+}
+
+cases {
+  name: "an_undeclared_oneof_name_can_be_skipped"
+  doc: "The other half of being a missing target."
+  input { s_1: "x" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { oneof_member { name: "no_such_oneof" } } }
+      on_missing: ON_MISSING_SKIP
+      remove {}
+    } }
+  }
+  output { s_1: "x" }
+}
+
+cases {
+  name: "a_oneof_selector_needs_a_message"
+  doc: "A oneof lives in a message; a list is not one."
+  input { r_s_1: "a" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets { selectors { oneof_member { name: "source" } } }
+      remove {}
+    } }
+  }
+  error: "illegal arm for target"
+}
+
+cases {
+  name: "a_oneof_and_its_set_member_are_the_same_target"
+  doc: "Naming one location twice is an error whichever way each selector spells it."
+  input { src_s: "set" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets {
+        selectors { oneof_member { name: "source" } }
+        selectors { key { field { name: "src_s" } } }
+      }
+      remove {}
+    } }
+  }
+  error: "duplicate target"
+}

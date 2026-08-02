@@ -96,6 +96,11 @@ const (
 	// not carry. Not a semantic divergence — the target simply differs.
 	causeNotMirrored = "the case addresses a field the Go mirror does not declare"
 
+	// Go has no oneof. A hand-written struct may model one — an interface, a
+	// tag field, a set of pointers — but the format cannot know which, and
+	// picking one would be guessing.
+	causeNoOneof = "a Go struct has no oneof to address"
+
 	// A Go type name is not a protobuf message name, so there is nothing to
 	// compare Patch.message_type against unless the caller supplies one with
 	// ExpectType. The corpus runner does not.
@@ -103,6 +108,18 @@ const (
 )
 
 var knownDivergences = map[string]string{
+	"remove_clears_whichever_member_is_set":          causeNoOneof,
+	"remove_on_a_clear_oneof_is_a_no_op":             causeNoOneof,
+	"assign_overwrites_the_member_that_is_set":       causeNoOneof,
+	"test_exists_false_holds_on_a_clear_oneof":       causeNoOneof,
+	"test_exists_true_holds_when_a_member_is_set":    causeNoOneof,
+	"test_value_fails_on_a_clear_oneof":              causeNoOneof,
+	"nest_descends_into_the_member_that_is_set":      causeNoOneof,
+	"insert_refuses_an_occupied_oneof":               causeNoOneof,
+	"an_undeclared_oneof_name_is_a_missing_target":   causeNoOneof,
+	"an_undeclared_oneof_name_can_be_skipped":        causeNoOneof,
+	"a_oneof_and_its_set_member_are_the_same_target": causeNoOneof,
+
 	"duplicate_target_is_an_error":    causeNoNumbers,
 	"field_conflict_is_never_skipped": causeNoNumbers,
 

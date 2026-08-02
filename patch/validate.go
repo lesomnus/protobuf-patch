@@ -245,6 +245,13 @@ func validateSelector(s *patchpb.Selector, kind any, at At) error {
 	case patchpb.Selector_Range_case:
 		return nil
 
+	case patchpb.Selector_OneofMember_case:
+		if s.GetOneofMember().GetName() == "" {
+			return Errf(CodeFieldNoIdentifier, at.Sub("oneof_member").Sub("name"),
+				"the empty string is not a oneof name")
+		}
+		return nil
+
 	case patchpb.Selector_Append_case:
 		switch kind {
 		case patchpb.Entry_Insert_case, patchpb.Entry_Move_case, patchpb.Entry_Copy_case:

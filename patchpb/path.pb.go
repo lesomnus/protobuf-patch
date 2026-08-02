@@ -876,6 +876,15 @@ func (x *Selector) GetAppend() *Append {
 	return nil
 }
 
+func (x *Selector) GetOneofMember() *Oneof {
+	if x != nil {
+		if x, ok := x.xxx_hidden_Kind.(*selector_OneofMember); ok {
+			return x.OneofMember
+		}
+	}
+	return nil
+}
+
 func (x *Selector) SetKey(v *Key) {
 	if v == nil {
 		x.xxx_hidden_Kind = nil
@@ -898,6 +907,14 @@ func (x *Selector) SetAppend(v *Append) {
 		return
 	}
 	x.xxx_hidden_Kind = &selector_Append{v}
+}
+
+func (x *Selector) SetOneofMember(v *Oneof) {
+	if v == nil {
+		x.xxx_hidden_Kind = nil
+		return
+	}
+	x.xxx_hidden_Kind = &selector_OneofMember{v}
 }
 
 func (x *Selector) HasKind() bool {
@@ -931,6 +948,14 @@ func (x *Selector) HasAppend() bool {
 	return ok
 }
 
+func (x *Selector) HasOneofMember() bool {
+	if x == nil {
+		return false
+	}
+	_, ok := x.xxx_hidden_Kind.(*selector_OneofMember)
+	return ok
+}
+
 func (x *Selector) ClearKind() {
 	x.xxx_hidden_Kind = nil
 }
@@ -953,10 +978,17 @@ func (x *Selector) ClearAppend() {
 	}
 }
 
+func (x *Selector) ClearOneofMember() {
+	if _, ok := x.xxx_hidden_Kind.(*selector_OneofMember); ok {
+		x.xxx_hidden_Kind = nil
+	}
+}
+
 const Selector_Kind_not_set_case case_Selector_Kind = 0
 const Selector_Key_case case_Selector_Kind = 1
 const Selector_Range_case case_Selector_Kind = 2
 const Selector_Append_case case_Selector_Kind = 3
+const Selector_OneofMember_case case_Selector_Kind = 4
 
 func (x *Selector) WhichKind() case_Selector_Kind {
 	if x == nil {
@@ -969,6 +1001,8 @@ func (x *Selector) WhichKind() case_Selector_Kind {
 		return Selector_Range_case
 	case *selector_Append:
 		return Selector_Append_case
+	case *selector_OneofMember:
+		return Selector_OneofMember_case
 	default:
 		return Selector_Kind_not_set_case
 	}
@@ -991,6 +1025,42 @@ type Selector_builder struct {
 	// smuggled into `Key.index` as a magic value, which is what forces
 	// negative indices to mean different things in different operations.
 	Append *Append
+	// The member of a `oneof` that is currently SET. Legal ONLY against a
+	// message.
+	//
+	// A oneof names ZERO OR ONE location, which is why it belongs here and
+	// not in `Key`. `Key` promises exactly one, and forcing a oneof into that
+	// promise is what made `assign` undefined: there is no way to say which
+	// member a value is meant for when two members share a type. As a
+	// Selector nothing new has to be defined — it resolves to the set member
+	// or to nothing, and every operation already says what it does with zero
+	// or one location:
+	//
+	//	remove     clear the set member. Nothing set selects nothing, so the
+	//	           entry is a no-op, exactly as an empty `Range` is.
+	//	assign     overwrite the set member in place. The arm must match THAT
+	//	           member's type; the document does not get to choose which
+	//	           member is written.
+	//	insert     the set member is occupied, so this fails. Nothing set
+	//	           selects nothing.
+	//	move/copy  write to the set member.
+	//	nest       descend into the set member, which must be a container.
+	//	test       reads the ONEOF ITSELF rather than the member, so that
+	//	           `exists = false` is satisfiable. This is the carve-out
+	//	           `test` already has for a missing target, applied here:
+	//	           `want.exists` reports whether any member is set, and
+	//	           `want.value` compares against the set member and fails when
+	//	           there is none.
+	//
+	// Addressing the oneof instead of enumerating its members is also what
+	// keeps a stored Patch correct when a member is ADDED later: an
+	// enumeration silently stops covering the new one.
+	//
+	// A name the message does not declare as a oneof is a MISSING TARGET,
+	// like an undeclared field. A SYNTHETIC oneof — the one protobuf
+	// generates for a proto3 `optional` field — is an ERROR, because it would
+	// be a second way to spell a field `Key.field` already addresses.
+	OneofMember *Oneof
 	// -- end of xxx_hidden_Kind
 }
 
@@ -1006,6 +1076,9 @@ func (b0 Selector_builder) Build() *Selector {
 	}
 	if b.Append != nil {
 		x.xxx_hidden_Kind = &selector_Append{b.Append}
+	}
+	if b.OneofMember != nil {
+		x.xxx_hidden_Kind = &selector_OneofMember{b.OneofMember}
 	}
 	return m0
 }
@@ -1046,11 +1119,138 @@ type selector_Append struct {
 	Append *Append `protobuf:"bytes,3,opt,name=append,oneof"`
 }
 
+type selector_OneofMember struct {
+	// The member of a `oneof` that is currently SET. Legal ONLY against a
+	// message.
+	//
+	// A oneof names ZERO OR ONE location, which is why it belongs here and
+	// not in `Key`. `Key` promises exactly one, and forcing a oneof into that
+	// promise is what made `assign` undefined: there is no way to say which
+	// member a value is meant for when two members share a type. As a
+	// Selector nothing new has to be defined — it resolves to the set member
+	// or to nothing, and every operation already says what it does with zero
+	// or one location:
+	//
+	//	remove     clear the set member. Nothing set selects nothing, so the
+	//	           entry is a no-op, exactly as an empty `Range` is.
+	//	assign     overwrite the set member in place. The arm must match THAT
+	//	           member's type; the document does not get to choose which
+	//	           member is written.
+	//	insert     the set member is occupied, so this fails. Nothing set
+	//	           selects nothing.
+	//	move/copy  write to the set member.
+	//	nest       descend into the set member, which must be a container.
+	//	test       reads the ONEOF ITSELF rather than the member, so that
+	//	           `exists = false` is satisfiable. This is the carve-out
+	//	           `test` already has for a missing target, applied here:
+	//	           `want.exists` reports whether any member is set, and
+	//	           `want.value` compares against the set member and fails when
+	//	           there is none.
+	//
+	// Addressing the oneof instead of enumerating its members is also what
+	// keeps a stored Patch correct when a member is ADDED later: an
+	// enumeration silently stops covering the new one.
+	//
+	// A name the message does not declare as a oneof is a MISSING TARGET,
+	// like an undeclared field. A SYNTHETIC oneof — the one protobuf
+	// generates for a proto3 `optional` field — is an ERROR, because it would
+	// be a second way to spell a field `Key.field` already addresses.
+	OneofMember *Oneof `protobuf:"bytes,4,opt,name=oneof_member,json=oneofMember,oneof"`
+}
+
 func (*selector_Key) isSelector_Kind() {}
 
 func (*selector_Range) isSelector_Kind() {}
 
 func (*selector_Append) isSelector_Kind() {}
+
+func (*selector_OneofMember) isSelector_Kind() {}
+
+// Oneof identifies a oneof of a message by its declared name.
+//
+// A oneof has no field number, so there is nothing to pin a name against and
+// no equivalent of the integrity check `Field` carries. It is a message rather
+// than a bare string so that it can gain options later without burning a
+// `Selector` arm.
+type Oneof struct {
+	state                  protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Name        *string                `protobuf:"bytes,1,opt,name=name"`
+	XXX_raceDetectHookData protoimpl.RaceDetectHookData
+	XXX_presence           [1]uint32
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *Oneof) Reset() {
+	*x = Oneof{}
+	mi := &file_patch_path_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Oneof) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Oneof) ProtoMessage() {}
+
+func (x *Oneof) ProtoReflect() protoreflect.Message {
+	mi := &file_patch_path_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+func (x *Oneof) GetName() string {
+	if x != nil {
+		if x.xxx_hidden_Name != nil {
+			return *x.xxx_hidden_Name
+		}
+		return ""
+	}
+	return ""
+}
+
+func (x *Oneof) SetName(v string) {
+	x.xxx_hidden_Name = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 1)
+}
+
+func (x *Oneof) HasName() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
+}
+
+func (x *Oneof) ClearName() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
+	x.xxx_hidden_Name = nil
+}
+
+type Oneof_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	// The oneof's declared name, e.g. "source". Required; the empty string is
+	// not a legal oneof name.
+	Name *string
+}
+
+func (b0 Oneof_builder) Build() *Oneof {
+	m0 := &Oneof{}
+	b, x := &b0, m0
+	_, _ = b, x
+	if b.Name != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 1)
+		x.xxx_hidden_Name = b.Name
+	}
+	return m0
+}
 
 // Range selects the list elements in the half-open interval [begin, end).
 //
@@ -1089,7 +1289,7 @@ type Range struct {
 
 func (x *Range) Reset() {
 	*x = Range{}
-	mi := &file_patch_path_proto_msgTypes[5]
+	mi := &file_patch_path_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1101,7 +1301,7 @@ func (x *Range) String() string {
 func (*Range) ProtoMessage() {}
 
 func (x *Range) ProtoReflect() protoreflect.Message {
-	mi := &file_patch_path_proto_msgTypes[5]
+	mi := &file_patch_path_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1195,7 +1395,7 @@ type Append struct {
 
 func (x *Append) Reset() {
 	*x = Append{}
-	mi := &file_patch_path_proto_msgTypes[6]
+	mi := &file_patch_path_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1207,7 +1407,7 @@ func (x *Append) String() string {
 func (*Append) ProtoMessage() {}
 
 func (x *Append) ProtoReflect() protoreflect.Message {
-	mi := &file_patch_path_proto_msgTypes[6]
+	mi := &file_patch_path_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1245,7 +1445,7 @@ type Location struct {
 
 func (x *Location) Reset() {
 	*x = Location{}
-	mi := &file_patch_path_proto_msgTypes[7]
+	mi := &file_patch_path_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1257,7 +1457,7 @@ func (x *Location) String() string {
 func (*Location) ProtoMessage() {}
 
 func (x *Location) ProtoReflect() protoreflect.Message {
-	mi := &file_patch_path_proto_msgTypes[7]
+	mi := &file_patch_path_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1416,7 +1616,7 @@ func (b0 Location_builder) Build() *Location {
 type case_Location_Origin protoreflect.FieldNumber
 
 func (x case_Location_Origin) String() string {
-	md := file_patch_path_proto_msgTypes[7].Descriptor()
+	md := file_patch_path_proto_msgTypes[8].Descriptor()
 	if x == 0 {
 		return "not set"
 	}
@@ -1452,7 +1652,7 @@ type SameContainer struct {
 
 func (x *SameContainer) Reset() {
 	*x = SameContainer{}
-	mi := &file_patch_path_proto_msgTypes[8]
+	mi := &file_patch_path_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1464,7 +1664,7 @@ func (x *SameContainer) String() string {
 func (*SameContainer) ProtoMessage() {}
 
 func (x *SameContainer) ProtoReflect() protoreflect.Message {
-	mi := &file_patch_path_proto_msgTypes[8]
+	mi := &file_patch_path_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1509,13 +1709,16 @@ const file_patch_path_proto_rawDesc = "" +
 	"\x04kind\".\n" +
 	"\x04Path\x12&\n" +
 	"\bsegments\x18\x01 \x03(\v2\n" +
-	".patch.KeyR\bsegments\"\x81\x01\n" +
+	".patch.KeyR\bsegments\"\xb4\x01\n" +
 	"\bSelector\x12\x1e\n" +
 	"\x03key\x18\x01 \x01(\v2\n" +
 	".patch.KeyH\x00R\x03key\x12$\n" +
 	"\x05range\x18\x02 \x01(\v2\f.patch.RangeH\x00R\x05range\x12'\n" +
-	"\x06append\x18\x03 \x01(\v2\r.patch.AppendH\x00R\x06appendB\x06\n" +
-	"\x04kind\"/\n" +
+	"\x06append\x18\x03 \x01(\v2\r.patch.AppendH\x00R\x06append\x121\n" +
+	"\foneof_member\x18\x04 \x01(\v2\f.patch.OneofH\x00R\voneofMemberB\x06\n" +
+	"\x04kind\"\x1b\n" +
+	"\x05Oneof\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"/\n" +
 	"\x05Range\x12\x14\n" +
 	"\x05begin\x18\x01 \x01(\x12R\x05begin\x12\x10\n" +
 	"\x03end\x18\x02 \x01(\x12R\x03end\"\b\n" +
@@ -1528,33 +1731,35 @@ const file_patch_path_proto_rawDesc = "" +
 	"\x06origin\"\x0f\n" +
 	"\rSameContainerB1Z*github.com/lesomnus/protobuf-patch/patchpb\x92\x03\x02\b\x01b\beditionsp\xe8\a"
 
-var file_patch_path_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_patch_path_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_patch_path_proto_goTypes = []any{
 	(*Key)(nil),           // 0: patch.Key
 	(*Field)(nil),         // 1: patch.Field
 	(*MapKey)(nil),        // 2: patch.MapKey
 	(*Path)(nil),          // 3: patch.Path
 	(*Selector)(nil),      // 4: patch.Selector
-	(*Range)(nil),         // 5: patch.Range
-	(*Append)(nil),        // 6: patch.Append
-	(*Location)(nil),      // 7: patch.Location
-	(*SameContainer)(nil), // 8: patch.SameContainer
+	(*Oneof)(nil),         // 5: patch.Oneof
+	(*Range)(nil),         // 6: patch.Range
+	(*Append)(nil),        // 7: patch.Append
+	(*Location)(nil),      // 8: patch.Location
+	(*SameContainer)(nil), // 9: patch.SameContainer
 }
 var file_patch_path_proto_depIdxs = []int32{
-	1, // 0: patch.Key.field:type_name -> patch.Field
-	2, // 1: patch.Key.map_key:type_name -> patch.MapKey
-	0, // 2: patch.Path.segments:type_name -> patch.Key
-	0, // 3: patch.Selector.key:type_name -> patch.Key
-	5, // 4: patch.Selector.range:type_name -> patch.Range
-	6, // 5: patch.Selector.append:type_name -> patch.Append
-	3, // 6: patch.Location.path:type_name -> patch.Path
-	8, // 7: patch.Location.same_container:type_name -> patch.SameContainer
-	0, // 8: patch.Location.key:type_name -> patch.Key
-	9, // [9:9] is the sub-list for method output_type
-	9, // [9:9] is the sub-list for method input_type
-	9, // [9:9] is the sub-list for extension type_name
-	9, // [9:9] is the sub-list for extension extendee
-	0, // [0:9] is the sub-list for field type_name
+	1,  // 0: patch.Key.field:type_name -> patch.Field
+	2,  // 1: patch.Key.map_key:type_name -> patch.MapKey
+	0,  // 2: patch.Path.segments:type_name -> patch.Key
+	0,  // 3: patch.Selector.key:type_name -> patch.Key
+	6,  // 4: patch.Selector.range:type_name -> patch.Range
+	7,  // 5: patch.Selector.append:type_name -> patch.Append
+	5,  // 6: patch.Selector.oneof_member:type_name -> patch.Oneof
+	3,  // 7: patch.Location.path:type_name -> patch.Path
+	9,  // 8: patch.Location.same_container:type_name -> patch.SameContainer
+	0,  // 9: patch.Location.key:type_name -> patch.Key
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_patch_path_proto_init() }
@@ -1577,8 +1782,9 @@ func file_patch_path_proto_init() {
 		(*selector_Key)(nil),
 		(*selector_Range)(nil),
 		(*selector_Append)(nil),
+		(*selector_OneofMember)(nil),
 	}
-	file_patch_path_proto_msgTypes[7].OneofWrappers = []any{
+	file_patch_path_proto_msgTypes[8].OneofWrappers = []any{
 		(*location_Path)(nil),
 		(*location_SameContainer)(nil),
 	}
@@ -1588,7 +1794,7 @@ func file_patch_path_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_patch_path_proto_rawDesc), len(file_patch_path_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
