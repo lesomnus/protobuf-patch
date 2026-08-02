@@ -2,7 +2,7 @@
 
 `proto/patch/{delta,segment,value}.proto`를 **정의 그 자체로만** 평가한 문서. 구현과의 괴리는 다루지 않는다.
 
-> 관련 문서: [patch-schema-review.md](patch-schema-review.md) — 구현 괴리를 포함한 전체 검토. 여기서 보류한 항목의 근거와 재현 사례는 그쪽에 있다.
+> 관련 문서: [schema-review.md](schema-review.md) — 구현 괴리를 포함한 전체 검토. 여기서 보류한 항목의 근거와 재현 사례는 그쪽에 있다.
 
 ---
 
@@ -549,7 +549,7 @@ S8(Value가 자기서술적이지 않음)과 결합하면 결과는 확정적이
 
 ## 8. 보류 — 구현 괴리
 
-**정의는 명확한데 코드가 어긋난 것들.** 지금은 손대지 않고 유지한다. 근거와 재현 사례는 [patch-schema-review.md](patch-schema-review.md)에 있다.
+**정의는 명확한데 코드가 어긋난 것들.** 지금은 손대지 않고 유지한다. 근거와 재현 사례는 [schema-review.md](schema-review.md)에 있다.
 
 | 보류 항목 | 전체 검토 # | 관련 정의 결함 |
 |---|---|---|

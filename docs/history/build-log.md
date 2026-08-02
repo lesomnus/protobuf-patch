@@ -1,6 +1,6 @@
 # 진행 상황
 
-[implementation-plan.md](implementation-plan.md)의 단계별 현황.
+[implementation-plan.md](plan.md)의 단계별 현황.
 
 > 범례: ⬜ 대기 · 🟨 진행중 · ✅ 완료
 

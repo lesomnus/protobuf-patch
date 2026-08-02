@@ -3,16 +3,13 @@
 A patch document format for Protocol Buffer messages, and a Go implementation
 of it.
 
-A `Patch` describes a change to a message — set this field, remove that map
-key, replace this element — as **itself a protobuf message**, so it can be
-serialized, stored, and transmitted like any other. It is modeled on JSON Patch
-(RFC 6902) and extends it where protobuf makes something expressible that JSON
-Pointer cannot: addressing a field by number, selecting a span of list
-elements, applying one operation to several targets, and nesting a sub-patch
-under a shared path prefix.
-
-The library validates and applies patches; it does not generate them from a
-pair of messages. There is no `Diff`. A `Patch` is built by hand.
+A patch describes a change to a message — set this field, remove that map key,
+replace this element — as **itself a protobuf message**, so it serializes,
+stores, and travels like any other. It is modeled on JSON Patch (RFC 6902) and
+extends it where protobuf makes something expressible that JSON Pointer cannot:
+addressing a field by number, selecting a span of list elements, applying one
+operation to several targets, and nesting a sub-patch under a shared path
+prefix.
 
 ```go
 p, err := patch.New("example.v1.User",
@@ -24,117 +21,101 @@ p, err := patch.New("example.v1.User",
 updated, err := patchproto.Apply(user, p)
 ```
 
-`Apply` is atomic: it works on a copy and returns it only on success, so a
-failure — a test that does not hold, a field that has moved, an operation from
-a newer revision of the schema — leaves the input untouched. There is
+## What it does
+
+**Applies patches, atomically.** `Apply` works on a copy and returns it only on
+success, so a failure — a test that does not hold, a field that has moved, an
+operation from a newer revision — leaves the input untouched. There is
 deliberately no in-place variant, because one could not honor that.
 
-Naming a message type is optional, and its presence is the assertion: a patch
-that declares one is refused against anything else, and one built with
-`patch.NewUntyped` applies to any message. That is for the operations that
-address fields several resource types share — a name, an etag, labels — where
-requiring a type would mean a copy of the document per resource.
+**Fails closed.** Anything a reader does not understand, or cannot resolve,
+aborts the whole document rather than applying the part it understood. The
+single opt-out is recorded on the wire, so tolerance is always the author's
+decision.
 
-A patch can also be applied to JSON that has no schema at all:
+**Does not convert.** Each protobuf type class takes exactly one value form. A
+mismatch is an error, never a widened, narrowed, or truncated write.
 
-```go
-out, err := patchjson.Apply(doc, p)
-```
+**Does not generate.** There is no `Diff`; a patch is built by hand.
 
-That is a weaker contract, and deliberately so. The format distinguishes a
-message from a map, an int32 from an int64, and a declared field from an
-undeclared one; none of those exist in schema-less JSON, so the same patch does
-not mean quite the same thing to both engines. `patchjson` refuses everything it
-cannot check rather than guessing, and the disagreements that remain are
-enumerated and tested — see `TestDivergenceFromPatchproto`.
+## Targets
 
-A hand-written Go struct works too, and Go's static types recover most of what
-JSON loses — a struct is not a map, an int32 is not an int64, and a name absent
-from a struct type genuinely names nothing:
+| Package | Target | |
+| ------- | ------ | --- |
+| [`patchproto`](patchproto/) | `proto.Message` | the reference implementation |
+| [`patchstruct`](patchstruct/) | a hand-written Go struct | config types, DTOs |
+| [`patchjson`](patchjson/) | schema-less JSON | |
 
 ```go
-cfg, err := patchstruct.Apply(cfg, p)
+updated, err := patchproto.Apply(user, p)   // a message
+cfg, err     := patchstruct.Apply(cfg, p)   // a Go struct
+out, err     := patchjson.Apply(doc, p)     // a JSON document
 ```
 
-Of the 39 conformance cases, `patchstruct` agrees with `patchproto` on 37 and
-`patchjson` on 28. Each engine declares its remaining disagreements by cause,
-and a new one cannot appear without being written down.
+Each engine enforces as much of the format as its target can express and
+**refuses what it cannot check** rather than guessing. Go's static types recover
+most of what JSON loses, so `patchstruct` sits much closer to the reference than
+`patchjson` does — of the 42 conformance cases, `patchstruct` agrees on 38 and
+`patchjson` on 29. Every remaining disagreement is declared with a cause and
+tested, so a new one cannot appear silently. See [engines.md](docs/engines.md).
 
-Applying a patch directly to serialized wire-format bytes, without
-unmarshaling, is planned as a fourth implementation sharing the same rules and
-the same conformance corpus.
+## Documentation
 
-## Packages
+| | |
+| --- | --- |
+| [format.md](docs/format.md) | The format: addressing, values, operations, failure, evolution |
+| [examples.md](docs/examples.md) | Patches in ProtoJSON, with their real inputs, outputs, and errors |
+| [engines.md](docs/engines.md) | The three engines, what each can enforce, and where they differ |
+| [decisions.md](docs/decisions.md) | Why the format is shaped this way |
+| [history/](docs/history/) | The review and planning documents this came out of (Korean) |
 
-| Package | What it does |
-| ------- | ------------ |
-| [`patch`](patch/) | The error taxonomy, the builders, validation, and every rule decidable from a document and a descriptor |
-| [`patchproto`](patchproto/) | Applies a patch to a `proto.Message` |
-| [`patchjson`](patchjson/) | Applies a patch to schema-less JSON, refusing what it cannot check |
-| [`patchstruct`](patchstruct/) | Applies a patch to a hand-written Go struct |
-| [`conformance`](conformance/) | The corpus every implementation must satisfy, and its runner |
-| [`patchpb`](patchpb/) | Generated bindings |
-
-The split between `patch` and `patchproto` is whether a message *instance* is
-needed. Field resolution, range normalization, and value legality need only a
-descriptor, so they live in `patch` and will be shared with the wire-format
-implementation rather than reimplemented — the previous design's three backends
-each resolved these themselves and drifted into reading the same document three
-different ways.
+The normative source is the comments in [`proto/patch/`](proto/patch/). The
+`.proto` is the specification; everything above is derived from it.
 
 ## The schema
 
-Three files, all normative — the comments in them are the specification, not
-the documentation of one:
-
 | File | Contents |
 | ---- | -------- |
-| [`proto/patch/patch.proto`](proto/patch/patch.proto) | `Patch`, `Delta`, `Entry`, the seven operations, and the failure contract |
-| [`proto/patch/path.proto`](proto/patch/path.proto) | Addressing: `Key`, `Field`, `MapKey`, `Path`, `Selector`, `Range`, `Location` |
-| [`proto/patch/value.proto`](proto/patch/value.proto) | Literals: `Value`, `MessageValue`, `ListValue`, `MapValue` |
+| [`patch.proto`](proto/patch/patch.proto) | `Patch`, `Delta`, `Entry`, the seven operations, the failure contract |
+| [`path.proto`](proto/patch/path.proto) | Addressing: `Key`, `Field`, `MapKey`, `Path`, `Selector`, `Range`, `Location` |
+| [`value.proto`](proto/patch/value.proto) | Literals: `Value`, `MessageValue`, `ListValue`, `MapValue` |
 
-Generated Go bindings live in [`patchpb/`](patchpb/).
+Generated Go bindings are in [`patchpb/`](patchpb/).
 
 ### Design principles
 
-These five decide every case where the schema had a choice.
+These five decide every case where the format had a choice.
 
-1. **Fail closed.** Anything a reader does not understand, or cannot resolve,
-   is an error that aborts the whole document. The single opt-out
-   (`Entry.on_missing`) is recorded on the wire, so tolerance is always the
-   author's decision and never a reader's default.
-2. **Values are self-describing.** One `Value` arm per protobuf type class, and
-   no conversion lattice — a value can be validated against a target field
-   without being converted, and a mismatch is an error rather than a truncated
-   write.
-3. **Absence is never meaning.** Container scope is an explicit `oneof` arm,
-   not an empty target list. There is no null.
+1. **Fail closed.** Anything unrecognized or unresolvable aborts the document.
+   The one opt-out, `Entry.on_missing`, is recorded on the wire.
+2. **Values are self-describing.** One arm per protobuf type class and no
+   conversion lattice — a value can be validated against a field without being
+   converted, and a mismatch is an error rather than a truncated write.
+3. **Absence is never meaning.** Container scope is an explicit `oneof` arm, not
+   an empty target list. There is no null. Range bounds are read through
+   presence.
 4. **Single-valued and multi-valued addressing are different types.** `Key`
    names exactly one location and is the only thing a `Path` may contain;
    `Selector` names zero or more and appears only in `Entry.targets`.
-5. **The `.proto` is the specification.** Every rule is in the comments. This
-   README is derived documentation.
+5. **The `.proto` is the specification.** Every rule lives in its comments.
+
+The reasoning behind each is in [decisions.md](docs/decisions.md).
 
 ## Versioning
 
 The package is `patch`, with no version suffix. A future breaking revision will
-be a new package — `patchv2`, in `proto/patchv2/` — rather than a suffix on
-this one. Within `patch`, a change that alters the meaning of an existing
-construct increments `Patch.min_reader_revision`, which readers must check.
+be a new package — `patchv2`, in `proto/patchv2/` — rather than a suffix on this
+one. Within `patch`, a change that alters the meaning of an existing construct
+increments `Patch.min_reader_revision`, which readers must check.
+
+Naming a message type is optional, and its presence is the assertion: a patch
+that declares one is refused against anything else, and one built with
+`patch.NewUntyped` applies to any message. That is for the operations addressing
+fields several resource types share — a name, an etag, labels — where requiring
+a type would mean a copy of the document per resource.
 
 `buf lint`'s `PACKAGE_VERSION_SUFFIX` rule is excepted in `buf.yaml` for this
 reason.
-
-## Documents
-
-| Document | What it is |
-| -------- | ---------- |
-| [examples.md](docs/examples.md) | Patches written out in ProtoJSON, with their real inputs, outputs, and errors |
-| [progress.md](docs/progress.md) | What is built, and the decisions taken while building it |
-| [implementation-plan.md](docs/implementation-plan.md) | The plan it was built to, in dependency order |
-| [patch-schema-redesign.md](docs/patch-schema-redesign.md) | What the current schema decided, and why |
-| [patch-spec-defects.md](docs/patch-spec-defects.md) | The 21 definition defects in the previous schema that this one resolves |
-| [patch-schema-review.md](docs/patch-schema-review.md) | The full review the defect list was distilled from |
 
 ## Development
 
@@ -145,8 +126,5 @@ go test ./...
 ```
 
 The conformance corpus lives in [`conformance/cases`](conformance/cases) as
-textproto, not Go, so that a second implementation can run the same cases
+textproto rather than Go, so that a second implementation can run the same cases
 without importing the first one's tests.
-
-The previous implementation, against the previous schema, is preserved at
-commit `2a96ef1` of `github.com/lesomnus/protobuf-diff`.

@@ -2,7 +2,7 @@
 
 `proto/patch/*.proto`를 구현하기 위한 계획. 스키마는 확정되었고 이 문서는 그것을 코드로 옮기는 범위·구조·순서를 다룬다.
 
-> 스키마의 근거: [patch-schema-redesign.md](patch-schema-redesign.md) · [patch-spec-defects.md](patch-spec-defects.md) · [patch-schema-review.md](patch-schema-review.md)
+> 스키마의 근거: [redesign.md](redesign.md) · [spec-defects.md](spec-defects.md) · [schema-review.md](schema-review.md)
 >
 > 구 구현 참조본: `/workspaces/github.com/lesomnus/protobuf-diff` (커밋 `2a96ef1`)
 
@@ -56,7 +56,7 @@ func Apply[T proto.Message](m T, p *patchpb.Patch, opts ...Option) (T, error)
 
 ### 2.3 vacancy는 에러가 아니라 타입이다
 
-`test.exists = false`가 성립하려면 *"주소는 유효한데 거기 아무것도 없다"*를 **읽을 수 있어야** 한다. 해석기가 vacancy를 `error`로 반환하면 그 연산은 구현 불가능하다. (스키마 초안이 정확히 이 함정에 빠졌다 — [redesign §5](patch-schema-redesign.md) 참조.)
+`test.exists = false`가 성립하려면 *"주소는 유효한데 거기 아무것도 없다"*를 **읽을 수 있어야** 한다. 해석기가 vacancy를 `error`로 반환하면 그 연산은 구현 불가능하다. (스키마 초안이 정확히 이 함정에 빠졌다 — [redesign §5](redesign.md) 참조.)
 
 ```go
 type Resolution struct {
@@ -99,7 +99,7 @@ internal/sample/    테스트 픽스처
 internal/x/         테스트 헬퍼
 ```
 
-> 계획은 공유 규칙을 `internal/spec`에 두려 했으나 **에러 분류가 곧 API인데 `internal/`은 import할 수 없다.** 분할 기준을 "메시지 인스턴스를 만지는가"로 바꿔 `patch/`에 두었다 — 자세한 것은 [progress.md](progress.md).
+> 계획은 공유 규칙을 `internal/spec`에 두려 했으나 **에러 분류가 곧 API인데 `internal/`은 import할 수 없다.** 분할 기준을 "메시지 인스턴스를 만지는가"로 바꿔 `patch/`에 두었다 — 자세한 것은 [build-log.md](build-log.md).
 
 **규칙: `patch/`에 있는 판단을 소비자가 재구현하지 않는다.** `Range` 정규화가 두 곳에 있으면 두 곳이 갈라진다. 구 구현에서 정확히 그 일이 일어났다(`expandListTargets` vs `RangeSegment.Match`가 presence·부호·합집합 셋 다 불일치).
 

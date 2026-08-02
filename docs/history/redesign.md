@@ -2,7 +2,7 @@
 
 `proto/patch/{patch,path,value}.proto` — 정의 결함 S1–S21을 해소하기 위한 전면 재작성의 결정 기록.
 
-> 배경: [patch-spec-defects.md](patch-spec-defects.md) (S1–S21) · [patch-schema-review.md](patch-schema-review.md) (구현 괴리 포함 전체 검토)
+> 배경: [spec-defects.md](spec-defects.md) (S1–S21) · [schema-review.md](schema-review.md) (구현 괴리 포함 전체 검토)
 
 ---
 
