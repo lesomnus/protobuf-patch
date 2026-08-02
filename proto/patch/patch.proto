@@ -34,6 +34,26 @@ option go_package = "github.com/lesomnus/protobuf-patch/patchpb";
 // mode. An applier that mutates a caller-owned message in place cannot honor
 // this contract and MUST NOT be offered as the primary interface.
 //
+// RESOURCE BOUNDS. A Patch nests without limit in two independent places:
+// `nest` chains Deltas, and a `Value` literal nests through `m`, `l`, and
+// `map`. Both are recursive, so a document of a few tens of kilobytes can
+// describe hundreds of thousands of levels, and a reader that follows them
+// naively will spend memory and stack far out of proportion to the input.
+//
+// An implementation MUST bound the nesting depth it will follow, in both
+// places, and MUST fail closed when a document exceeds the bound. The bound
+// itself is implementation-defined: this schema fixes no number, because the
+// right one depends on the reader's stack and on what its producers
+// legitimately send.
+//
+// A consequence, stated here so that it is not a surprise: a document one
+// reader accepts, another may refuse. That is the same shape as
+// `min_reader_revision`, and it only ever moves toward refusal — never toward
+// a reader applying a document it did not fully process.
+//
+// `Entry.path` and `Targets.selectors` are repeated rather than recursive.
+// They are linear in the size of the document and need no such bound.
+//
 // UNKNOWN FIELDS ON THE TARGET. Fields present on the target's wire form but
 // not declared by its descriptor are not addressable by any `Key`, and are not
 // part of the container for `remove` or `assign` at container scope: they MUST

@@ -53,6 +53,12 @@ const (
 	// non-empty: Targets.selectors, Delta.entries.
 	CodeEmptyCollection
 
+	// CodeTooDeep is a document nesting deeper than this reader will follow,
+	// in either of the two recursive places: a chain of nest, or a Value
+	// literal. The schema requires a bound and leaves the number to the
+	// implementation; see Limits.
+	CodeTooDeep
+
 	// CodeUnrecognizedEnum is an enum value outside the set this file declares
 	// — today, an OnMissing that is neither UNSPECIFIED nor SKIP.
 	CodeUnrecognizedEnum
@@ -156,6 +162,7 @@ var codeNames = map[Code]string{
 	CodeMissingOneof:         "missing oneof",
 	CodeMissingField:         "missing field",
 	CodeEmptyCollection:      "empty collection",
+	CodeTooDeep:              "document is nested too deeply",
 	CodeUnrecognizedEnum:     "unrecognized enum value",
 	CodeFieldNoIdentifier:    "field has no identifier",
 	CodeIllegalSelector:      "illegal selector for operation",

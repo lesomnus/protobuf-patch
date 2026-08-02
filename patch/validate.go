@@ -17,12 +17,27 @@ import (
 // the target. In particular the unknown-field scan below is what actually
 // enforces the schema's forward-compatibility rule, so skipping it turns a
 // document from a newer revision into a silently partial application.
+//
+// Validate uses DefaultLimits; ValidateWith takes its own.
 func Validate(p *patchpb.Patch) error {
+	return ValidateWith(p, DefaultLimits)
+}
+
+// ValidateWith is Validate under caller-chosen Limits. A zero field falls back
+// to the corresponding DefaultLimits value.
+func ValidateWith(p *patchpb.Patch, lim Limits) error {
 	if p == nil {
 		return Errf(CodeMissingField, "", "nil Patch")
 	}
 
-	// Unknown fields first: until this passes, nothing else observed about the
+	// Depth before anything else, including the unknown-field scan: every
+	// other pass walks the whole document, so each of them is unsafe on a
+	// document deep enough to exhaust memory or stack. See checkDepth.
+	if err := checkDepth(p, lim.orDefault()); err != nil {
+		return err
+	}
+
+	// Unknown fields next: until this passes, nothing else observed about the
 	// document can be trusted to mean what it appears to mean.
 	if at, ok := findUnknown(p.ProtoReflect(), ""); ok {
 		return Errf(CodeUnknownField, at,

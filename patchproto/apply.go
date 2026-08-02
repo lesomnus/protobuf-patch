@@ -31,7 +31,7 @@ func Apply[T proto.Message](m T, p *patchpb.Patch, opts ...Option) (T, error) {
 		opt(&o)
 	}
 
-	if err := patch.Validate(p); err != nil {
+	if err := patch.ValidateWith(p, o.limits); err != nil {
 		return zero, err
 	}
 	if m.ProtoReflect().IsValid() == false && m.ProtoReflect().Descriptor() == nil {
@@ -61,7 +61,17 @@ func Apply[T proto.Message](m T, p *patchpb.Patch, opts ...Option) (T, error) {
 // adding one is not a breaking change.
 type Option func(*options)
 
-type options struct{}
+type options struct{ limits patch.Limits }
+
+// WithLimits bounds how deep into a document this call will recurse.
+//
+// The schema requires a bound and leaves the number to the implementation;
+// patch.DefaultLimits is what applies when this option is absent. Raise it for
+// a producer that legitimately sends deep literals, lower it to be stricter
+// with documents from somewhere you do not control.
+func WithLimits(l patch.Limits) Option {
+	return func(o *options) { o.limits = l }
+}
 
 func applyDelta(base cont, d *patchpb.Delta, at patch.At) error {
 	for i, e := range d.GetEntries() {

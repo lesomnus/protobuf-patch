@@ -42,7 +42,20 @@ import (
 // Option configures Apply.
 type Option func(*options)
 
-type options struct{ expect string }
+type options struct {
+	expect string
+	limits patch.Limits
+}
+
+// WithLimits bounds how deep into a document this call will recurse.
+//
+// The schema requires a bound and leaves the number to the implementation;
+// patch.DefaultLimits is what applies when this option is absent. Raise it for
+// a producer that legitimately sends deep literals, lower it to be stricter
+// with documents from somewhere you do not control.
+func WithLimits(l patch.Limits) Option {
+	return func(o *options) { o.limits = l }
+}
 
 // ExpectType supplies the name a Patch's message_type must match.
 //
@@ -68,7 +81,7 @@ func Apply[T any](v T, p *patchpb.Patch, opts ...Option) (T, error) {
 	for _, opt := range opts {
 		opt(&o)
 	}
-	if err := patch.Validate(p); err != nil {
+	if err := patch.ValidateWith(p, o.limits); err != nil {
 		return zero, err
 	}
 	if o.expect != "" && p.HasMessageType() && p.GetMessageType() != o.expect {
