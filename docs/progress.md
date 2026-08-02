@@ -344,3 +344,61 @@ func Convert(doc Doc, md protoreflect.MessageDescriptor) (*patchpb.Patch, error)
 `go test ./...` 388개 하위 테스트 통과 · `buf lint` 클린 · `gofmt` 클린.
 
 **남은 것은 `patchwire`뿐이다.** `internal/spec` 대신 `patch/`를 공유하고, `conformance.Run`에 자기 `Applier`를 넘겨 `patchproto`와 같은 답을 내는지 고정하면 된다.
+
+---
+
+## patchjson — 스키마 없는 JSON 백엔드 ✅
+
+`patchjson/apply.go` · `cont.go` · `container.go` · `value.go` · `patch/schemaless.go`
+
+```go
+func Apply(doc []byte, p *patchpb.Patch, opts ...Option) ([]byte, error)
+func ApplyValue(v any, p *patchpb.Patch, opts ...Option) (any, error)
+```
+
+**계획서 §1.2에서 "폐기"로 적었던 것을 되돌렸다.** 당시 논거는 *"descriptor를 요구하면 round-trip이 이미 커버한다"*였는데, 두 가지가 틀렸다:
+
+1. round-trip은 커버하지 못한다. `protojson.Unmarshal`은 선언되지 않은 멤버를 **거부하거나**(기본) `DiscardUnknown`으로 **조용히 없앤다.** 둘 다 스키마 자신의 규칙 — *"A Patch never discards data it did not name"* — 을 어긴다.
+2. 애초에 필요한 건 descriptor를 요구하는 백엔드가 아니라 **스키마 자체가 없는 JSON**을 다루는 기계였다.
+
+### 정의 가능하게 만드는 한 줄
+
+> **JSON 오브젝트는 맵처럼 동작한다.**
+
+스키마가 없으면 어떤 키든 유효한 자리다. 그래서 `assign`이 멤버를 만들고 `insert`는 비어 있기를 요구한다. 형식의 *"선언된 필드는 항상 존재하고, 선언 안 된 필드는 결코 만들 수 없다"*는 JSON에 그림자가 없고, 스키마가 없으면 그림자가 필요하지도 않다.
+
+### 거부하는 것 (근사하지 않는다)
+
+| 구조 | 왜 |
+|---|---|
+| `Field.number` | 스키마 없는 문서에 필드 번호가 없음 → **검사 불가능한 제약을 버리는 건 관용이 아니다.** `on_missing=SKIP`이어도 오류 |
+| `MapKey.i`/`u`/`b` | JSON 키는 문자열. 구 구현은 문자열화했고, 그래서 `Field("7")`과 `FieldNum(7)`이 같은 항목을 가리켰다 |
+| `NaN` / `Infinity` | JSON에 표현이 없음(RFC 8259 §6). ProtoJSON의 문자열 표기는 작성자가 그 문자열을 의도한 것과 구별 불가 |
+
+검사할 수 없어 **그냥 안 하는 것** 둘 — 침묵하는 것보다 적어두는 게 낫다:
+
+- `Patch.message_type` — JSON 문서는 자기 타입을 말하지 않는다. 아는 이름이 있으면 `ExpectType`으로 넘기면 검사한다
+- `move`/`copy`의 선언 타입 일치 — 비교할 타입이 없다
+
+### 갈림길에서 고른 것
+
+- **64비트 정수는 평범한 JSON 숫자로 쓴다** (ProtoJSON의 문자열 형태 아님). 2^53 초과분이 float64 리더에서 깨지지만, 이 엔진은 protobuf에서 오지 않은 문서를 위한 것이고 거기선 `5`를 `"5"`로 쓰는 게 더 놀랍다.
+- **손대지 않은 숫자는 텍스트를 보존한다** — `json.Number`로 디코딩. `1e3`이 `1000`이 되지 않는다.
+- **오브젝트 멤버 순서는 보존하지 않는다.** RFC 8259 §4가 오브젝트를 무순서로 정의하고, Go는 맵을 키 정렬 순서로 마샬한다. 순서 보존은 ordered map 타입이 필요한 별도 작업.
+
+### 조용히 갈라지지 않게 하는 장치
+
+구 설계는 세 백엔드가 같은 문서를 다르게 읽어서 죽었다. **위험은 둘이 다른 게 아니라 조용히 다른 것**이다.
+
+`TestDivergenceFromPatchproto`가 공유 코퍼스 39개를 이 엔진으로도 돌리고, **일치하지 않는 케이스는 원인이 선언되어 있어야만** 통과시킨다. 선언해놓고 실제로는 일치하면 그것도 실패다.
+
+**28 / 39 일치.** 나머지 11개는 네 가지 원인으로 환원된다:
+
+| 원인 | 케이스 수 | 내용 |
+|---|---|---|
+| `causeDeclared` | 2 | "선언됨"은 descriptor의 속성이라 JSON에 그림자가 없다 |
+| `causeEmptyContainer` | 6 | 빈 리스트/맵은 protobuf엔 존재하고 JSON엔 없다 (ProtoJSON이 생략) |
+| `causeNoNumbers` | 2 | 필드 번호를 검사할 수 없어 더 일찍, 다른 이유로 거부 |
+| `causeNoTypes` | 1 | 비교할 선언 타입이 없다 |
+
+원인을 케이스가 아니라 **상수로** 이름 붙였다. 새 항목은 넷 중 하나에 들어맞아야 하고, 아니면 버그다.

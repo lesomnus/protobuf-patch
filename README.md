@@ -30,17 +30,22 @@ failure — a test that does not hold, a field that has moved, an operation from
 a newer revision of the schema — leaves the input untouched. There is
 deliberately no in-place variant, because one could not honor that.
 
-Patches apply to a `proto.Message`. Applying one directly to serialized
-wire-format bytes, without unmarshaling, is planned as a separate
-implementation sharing the same schema rules and the same conformance corpus.
-To patch a JSON document, unmarshal it and apply:
+A patch can also be applied to JSON that has no schema at all:
 
 ```go
-m := &pb.User{}
-protojson.Unmarshal(doc, m)
-m, err := patchproto.Apply(m, p)
-out, err := protojson.Marshal(m)
+out, err := patchjson.Apply(doc, p)
 ```
+
+That is a weaker contract, and deliberately so. The format distinguishes a
+message from a map, an int32 from an int64, and a declared field from an
+undeclared one; none of those exist in schema-less JSON, so the same patch does
+not mean quite the same thing to both engines. `patchjson` refuses everything it
+cannot check rather than guessing, and the disagreements that remain are
+enumerated and tested — see `TestDivergenceFromPatchproto`.
+
+Applying a patch directly to serialized wire-format bytes, without
+unmarshaling, is planned as a third implementation sharing the same rules and
+the same conformance corpus.
 
 ## Packages
 
@@ -48,6 +53,7 @@ out, err := protojson.Marshal(m)
 | ------- | ------------ |
 | [`patch`](patch/) | The error taxonomy, the builders, validation, and every rule decidable from a document and a descriptor |
 | [`patchproto`](patchproto/) | Applies a patch to a `proto.Message` |
+| [`patchjson`](patchjson/) | Applies a patch to schema-less JSON, refusing what it cannot check |
 | [`jsonpatch`](jsonpatch/) | Parses RFC 6902 documents and converts them to patches |
 | [`conformance`](conformance/) | The corpus every implementation must satisfy, and its runner |
 | [`patchpb`](patchpb/) | Generated bindings |
