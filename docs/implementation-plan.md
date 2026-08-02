@@ -18,6 +18,7 @@
 | **적용** | `proto.Message`에 `Patch`를 적용. 원자적 |
 | **빌더** | `Patch`를 손으로 조립하기 위한 계층 |
 | **JSON 적용** | 스키마 없는 JSON 문서에 `Patch`를 적용 |
+| **Go struct 적용** | 손으로 쓴 Go 구조체에 `Patch`를 적용 |
 
 ### 1.2 만들지 않는 것
 
@@ -25,7 +26,6 @@
 |---|---|
 | **`Diff`** | 범위에서 제외. 두 메시지로부터 `Patch`를 생성하지 않는다 |
 | **RFC 6902 변환** | JSON Patch 문서를 받아 `Patch`로 바꾸는 일은 요구된 적이 없다. 구 저장소에서 물려받아 계획에 들어왔을 뿐이라 제거했다 |
-| **Go struct 백엔드** | 아직. 생성된 구조체는 opaque API에서 필드가 전부 unexported라 `reflect`로 못 읽고, 어차피 `patchproto`가 처리한다. 손으로 쓴 구조체가 대상인데 그 수요가 확인되지 않았다 |
 | **`patchwire`** | 나중에. §5 참조 |
 
 **`Patch`를 만드는 경로는 빌더뿐이다.** `Diff`가 없으므로 빌더의 사용성이 곧 라이브러리의 사용성이다.
@@ -93,6 +93,7 @@ patch/              스키마 규칙의 단일 구현 + 빌더 — 모든 소비
   schemaless.go       descriptor 없는 소비자를 위한 해석
 patchproto/         proto.Message 백엔드
 patchjson/          스키마 없는 JSON 백엔드
+patchstruct/        손으로 쓴 Go 구조체 백엔드
 conformance/        적합성 코퍼스
 internal/sample/    테스트 픽스처
 internal/x/         테스트 헬퍼

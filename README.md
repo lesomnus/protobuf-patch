@@ -42,8 +42,20 @@ not mean quite the same thing to both engines. `patchjson` refuses everything it
 cannot check rather than guessing, and the disagreements that remain are
 enumerated and tested — see `TestDivergenceFromPatchproto`.
 
+A hand-written Go struct works too, and Go's static types recover most of what
+JSON loses — a struct is not a map, an int32 is not an int64, and a name absent
+from a struct type genuinely names nothing:
+
+```go
+cfg, err := patchstruct.Apply(cfg, p)
+```
+
+Of the 39 conformance cases, `patchstruct` agrees with `patchproto` on 37 and
+`patchjson` on 28. Each engine declares its remaining disagreements by cause,
+and a new one cannot appear without being written down.
+
 Applying a patch directly to serialized wire-format bytes, without
-unmarshaling, is planned as a third implementation sharing the same rules and
+unmarshaling, is planned as a fourth implementation sharing the same rules and
 the same conformance corpus.
 
 ## Packages
@@ -53,6 +65,7 @@ the same conformance corpus.
 | [`patch`](patch/) | The error taxonomy, the builders, validation, and every rule decidable from a document and a descriptor |
 | [`patchproto`](patchproto/) | Applies a patch to a `proto.Message` |
 | [`patchjson`](patchjson/) | Applies a patch to schema-less JSON, refusing what it cannot check |
+| [`patchstruct`](patchstruct/) | Applies a patch to a hand-written Go struct |
 | [`conformance`](conformance/) | The corpus every implementation must satisfy, and its runner |
 | [`patchpb`](patchpb/) | Generated bindings |
 

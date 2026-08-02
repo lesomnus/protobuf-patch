@@ -404,3 +404,48 @@ func ApplyValue(v any, p *patchpb.Patch, opts ...Option) (any, error)
 | `causeNoTypes` | 1 | 비교할 선언 타입이 없다 |
 
 원인을 케이스가 아니라 **상수로** 이름 붙였다. 새 항목은 넷 중 하나에 들어맞아야 하고, 아니면 버그다.
+
+---
+
+## patchstruct — 손으로 쓴 Go 구조체 백엔드 ✅
+
+`patchstruct/apply.go` · `cont.go` · `container.go` · `value.go`
+
+```go
+func Apply[T any](v T, p *patchpb.Patch, opts ...Option) (T, error)
+```
+
+**"struct는 JSON과 비슷한 논리로 살릴 수 있나"에 대한 답은 "그렇다, 그런데 더 좋다"였다.** Go의 정적 타입이 JSON이 잃는 것을 대부분 복구한다.
+
+| 형식의 규칙 | patchjson | patchstruct |
+|---|---|---|
+| `Value` arm ↔ 필드 종류 | ❌ (JSON 숫자는 하나) | ✅ `reflect.Kind` |
+| `MapKey` arm ↔ **선언된** 키 타입 | ❌ (JSON 키는 문자열) | ✅ `reflect.Type.Key()` |
+| 메시지 vs 맵 | ❌ (둘 다 오브젝트) | ✅ `Struct` vs `Map` |
+| "선언된 필드" | ❌ 그림자 없음 | ✅ 구조체 타입의 필드 집합은 고정 |
+
+**코퍼스 39개 중 37개 일치** (patchjson은 28개). 남은 둘은 `Field.number` 하나 때문이다.
+
+### 정한 것
+
+| 결정 | 근거 |
+|---|---|
+| `Field.name` → Go 필드명, `json_name` → `json` 태그 | protobuf의 name/json_name과 직접 대응. 둘 다 설정되면 하나로 해석하고 나머지를 검증 — 제약 모델 유지 |
+| `*T`의 nil = 부재, `T`의 zero = 부재 | protobuf의 explicit/implicit presence와 같은 구분 |
+| 임베디드 구조체는 평탄화하지 않음 | `encoding/json`의 승격에는 이름 충돌·깊이 규칙이 딸려온다. 타입명으로 주소 지정하면 규칙이 하나 준다 |
+| 정수 arm은 **너비 클래스**를 지킨다 | `i32`는 int8/16/32에만, `i64`는 int/int64에만. 클래스 안에서 좁은 타입은 범위 검사를 거친다 — 잘리는 것은 없다 |
+| nil 맵/슬라이스는 **만들어준다** | 스키마가 *"맵·리스트 필드는 항상 컨테이너로 존재한다"*고 하고 `patchproto`도 `Mutable`로 그렇게 한다. 코퍼스가 이 불일치를 잡아냈다 |
+
+### 거부하는 것
+
+| 구조 | 왜 |
+|---|---|
+| `Field.number` | Go 구조체에 필드 번호가 없다. 검사 불가능한 제약은 버리지 않는다 |
+| `Value.e` | Go 타입은 선언된 enum 값 집합을 갖지 않아 CLOSED 규칙을 검사할 수 없다 |
+| 배열 `[N]T`, `interface`, `chan`, `func`, `**T` | 길이가 고정이거나 정적으로 알 수 없다 |
+
+검사할 수 없어 안 하는 것 둘 — `Patch.message_type`(Go 타입명은 protobuf 이름이 아니다. `ExpectType`으로 넘기면 검사)과 oneof 점유(Go에 대응물이 없어 `insert`의 형제 규칙이 공허하다).
+
+### 생성된 구조체는 대상이 아니다
+
+opaque API에서 필드가 전부 `xxx_hidden_*`로 **unexported**라 `reflect`가 닿지 못한다. 그리고 어차피 이미 `proto.Message`라 `patchproto`가 처리한다. 이 엔진은 **평범한 도메인 타입**을 위한 것이다.
