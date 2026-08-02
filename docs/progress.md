@@ -9,7 +9,7 @@
 | P0 에러 분류 | ✅ | `patch/errors.go` |
 | P1 빌더 | ✅ | `patch/build.go`, `buildkey.go`, `buildvalue.go` |
 | P2 구조 검증 | ✅ | `patch/validate.go` |
-| P3 값 모델 | ⬜ | `patch/`, `patchproto/` |
+| P3 값 모델 | ✅ | `patch/value.go` |
 | P4 주소 해석 | ⬜ | `patch/`, `patchproto/` |
 | P5 적용 | ⬜ | `patchproto/`, `conformance/` |
 | P6 RFC 6902 변환 | ⬜ | `jsonpatch/` |
@@ -139,3 +139,42 @@ delta.entries[0].nest.delta.entries[0].nest.delta.entries[0].assign.value
 ### 테스트 구성
 
 `TestValidateEntry`의 케이스는 **전부 `patchpb`로 직접 조립한다.** 빌더로는 만들 수 없는 상태들이기 때문이다(P1 표 참조) — 그리고 그게 바로 검증이 필요한 모집단이다. 반대로 `TestValidateAcceptsWhatTheBuilderProduces`는 빌더 산출물이 오탐되지 않음을 확인한다.
+
+---
+
+## P3 — 값 모델 ✅
+
+`patch/value.go`
+
+```go
+func ShapeOf(v *patchpb.Value) Shape
+func CheckArm(v *patchpb.Value, fd protoreflect.FieldDescriptor, site Site, at At) error
+func Scalar(v *patchpb.Value, fd protoreflect.FieldDescriptor, site Site, at At) (protoreflect.Value, error)
+func MapKeyFor(k *patchpb.MapKey, fd protoreflect.FieldDescriptor, at At) (protoreflect.MapKey, error)
+```
+
+`value.proto`의 arm 표를 코드로 옮겼다. **변환 격자가 없다** — 맞지 않는 arm은 넓히거나 좁히거나 자르지 않고 `CodeIllegalArm`이다. 구 구현의 `patchproto/cast.go`에 해당하는 것이 아예 존재하지 않는다.
+
+### `Site` — 같은 필드가 위치에 따라 다른 arm을 받는다
+
+`repeated string` 필드는 **전체로는** `l`을, **원소 하나로는** `s`를 받는다. 이 구분이 없으면 `CheckArm`이 총함수가 될 수 없다.
+
+| Site | 대상 |
+|---|---|
+| `SiteField` | 필드 자체. cardinality에 따라 `l` / `map` / 스칼라·`m` |
+| `SiteElement` | repeated 필드의 원소 하나 |
+| `SiteMapValue` | map 필드의 값 하나 |
+
+`TestArmIsOneToOne`이 16개 필드 × 10개 값 생성자 조합을 전수로 돌려, 맞는 arm 하나만 통과하고 나머지는 전부 `CodeIllegalArm`임을 고정한다.
+
+### closed enum — 런타임 제약을 우회해야 했다
+
+스키마는 *"CLOSED enum은 선언된 번호만 받는다"*고 규정한다. 이를 테스트하려면 진짜 closed enum이 필요한데, **protobuf-go v1.36.11이 enum 자신의 `options.features`를 파싱하지 않는다.** `Enum.unmarshalSeed`(`internal/filedesc/desc_init.go`)는 부모에서 상속만 하고, File·Message·Field·Extension과 달리 자기 옵션은 읽지 않는다. 그래서 enum 본문에 `option features.enum_type = CLOSED;`를 써도 descriptor에는 들어가지만 `IsClosed()`는 계속 false다.
+
+→ `proto/sample/closed.proto`를 만들어 **파일 수준**으로 선언했다. 이유는 그 파일 주석에 기록해뒀다.
+
+### 맵 키
+
+arm이 선언된 키 타입과 정확히 일치해야 한다 — 숫자 키가 문자열 맵에 문자열화되지 않는다(구 구현은 `fmt.Sprintf("%d", ...)`로 강제 변환했다). arm이 맞아도 **값이 범위를 벗어나면 오류**다: `map<int32,V>`에 `i: 2^31`은 절단도 아니고 `on_missing`이 건너뛸 수 있는 vacancy도 아니다.
+
+`m_i32_s` `m_i64_s` `m_u32_s` `m_u64_s` `m_si64_s` `m_ux32_s` `m_b_s`를 sample에 추가했다 — 구 저장소가 커버리지 공백으로 인정했던(`root-replace-plan.md:84`) 정수·bool 키 맵이다.

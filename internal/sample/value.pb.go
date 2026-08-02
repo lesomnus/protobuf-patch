@@ -153,6 +153,14 @@ type Value struct {
 	xxx_hidden_RSi64_1     []int64                `protobuf:"zigzag64,1018,rep,packed,name=r_si64_1,json=rSi641"`
 	xxx_hidden_MSS         map[string]string      `protobuf:"bytes,10909,rep,name=m_s_s,json=mSS" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	xxx_hidden_MSM         map[string]*Value      `protobuf:"bytes,10911,rep,name=m_s_m,json=mSM" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	xxx_hidden_MI32S       map[int32]string       `protobuf:"bytes,10903,rep,name=m_i32_s,json=mI32S" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	xxx_hidden_MI64S       map[int64]string       `protobuf:"bytes,10905,rep,name=m_i64_s,json=mI64S" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	xxx_hidden_MU32S       map[uint32]string      `protobuf:"bytes,10913,rep,name=m_u32_s,json=mU32S" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	xxx_hidden_MU64S       map[uint64]string      `protobuf:"bytes,10904,rep,name=m_u64_s,json=mU64S" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	xxx_hidden_MSi64S      map[int64]string       `protobuf:"bytes,10918,rep,name=m_si64_s,json=mSi64S" protobuf_key:"zigzag64,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	xxx_hidden_MUx32S      map[uint32]string      `protobuf:"bytes,10907,rep,name=m_ux32_s,json=mUx32S" protobuf_key:"fixed32,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	xxx_hidden_MBS         map[bool]string        `protobuf:"bytes,10908,rep,name=m_b_s,json=mBS" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	xxx_hidden_Closed_1    Closed                 `protobuf:"varint,119,opt,name=closed_1,json=closed1,enum=sample.Closed"`
 	XXX_raceDetectHookData protoimpl.RaceDetectHookData
 	XXX_presence           [3]uint32
 	unknownFields          protoimpl.UnknownFields
@@ -800,6 +808,64 @@ func (x *Value) GetMSM() map[string]*Value {
 	return nil
 }
 
+func (x *Value) GetMI32S() map[int32]string {
+	if x != nil {
+		return x.xxx_hidden_MI32S
+	}
+	return nil
+}
+
+func (x *Value) GetMI64S() map[int64]string {
+	if x != nil {
+		return x.xxx_hidden_MI64S
+	}
+	return nil
+}
+
+func (x *Value) GetMU32S() map[uint32]string {
+	if x != nil {
+		return x.xxx_hidden_MU32S
+	}
+	return nil
+}
+
+func (x *Value) GetMU64S() map[uint64]string {
+	if x != nil {
+		return x.xxx_hidden_MU64S
+	}
+	return nil
+}
+
+func (x *Value) GetMSi64S() map[int64]string {
+	if x != nil {
+		return x.xxx_hidden_MSi64S
+	}
+	return nil
+}
+
+func (x *Value) GetMUx32S() map[uint32]string {
+	if x != nil {
+		return x.xxx_hidden_MUx32S
+	}
+	return nil
+}
+
+func (x *Value) GetMBS() map[bool]string {
+	if x != nil {
+		return x.xxx_hidden_MBS
+	}
+	return nil
+}
+
+func (x *Value) GetClosed_1() Closed {
+	if x != nil {
+		if protoimpl.X.Present(&(x.XXX_presence[2]), 94) {
+			return x.xxx_hidden_Closed_1
+		}
+	}
+	return Closed_CLOSED_UNSPECIFIED
+}
+
 func (x *Value) SetF64_1(v float64) {
 	x.xxx_hidden_F64_1 = v
 }
@@ -1015,47 +1081,47 @@ func (x *Value) SetSi64_3(v int64) {
 
 func (x *Value) SetOptF64(v float64) {
 	x.xxx_hidden_OptF64 = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 51, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 51, 95)
 }
 
 func (x *Value) SetOptF32(v float32) {
 	x.xxx_hidden_OptF32 = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 52, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 52, 95)
 }
 
 func (x *Value) SetOptI64(v int64) {
 	x.xxx_hidden_OptI64 = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 53, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 53, 95)
 }
 
 func (x *Value) SetOptU64(v uint64) {
 	x.xxx_hidden_OptU64 = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 54, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 54, 95)
 }
 
 func (x *Value) SetOptI32(v int32) {
 	x.xxx_hidden_OptI32 = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 55, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 55, 95)
 }
 
 func (x *Value) SetOptUx64(v uint64) {
 	x.xxx_hidden_OptUx64 = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 56, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 56, 95)
 }
 
 func (x *Value) SetOptUx32(v uint32) {
 	x.xxx_hidden_OptUx32 = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 57, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 57, 95)
 }
 
 func (x *Value) SetOptB(v bool) {
 	x.xxx_hidden_OptB = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 58, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 58, 95)
 }
 
 func (x *Value) SetOptS(v string) {
 	x.xxx_hidden_OptS = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 59, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 59, 95)
 }
 
 func (x *Value) SetOptM(v *Value) {
@@ -1067,37 +1133,37 @@ func (x *Value) SetOptBs(v []byte) {
 		v = []byte{}
 	}
 	x.xxx_hidden_OptBs = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 61, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 61, 95)
 }
 
 func (x *Value) SetOptU32(v uint32) {
 	x.xxx_hidden_OptU32 = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 62, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 62, 95)
 }
 
 func (x *Value) SetOptEnum(v Level) {
 	x.xxx_hidden_OptEnum = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 63, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[1]), 63, 95)
 }
 
 func (x *Value) SetOptSx32(v int32) {
 	x.xxx_hidden_OptSx32 = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[2]), 64, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[2]), 64, 95)
 }
 
 func (x *Value) SetOptSx64(v int64) {
 	x.xxx_hidden_OptSx64 = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[2]), 65, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[2]), 65, 95)
 }
 
 func (x *Value) SetOptSi32(v int32) {
 	x.xxx_hidden_OptSi32 = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[2]), 66, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[2]), 66, 95)
 }
 
 func (x *Value) SetOptSi64(v int64) {
 	x.xxx_hidden_OptSi64 = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[2]), 67, 87)
+	protoimpl.X.SetPresent(&(x.XXX_presence[2]), 67, 95)
 }
 
 func (x *Value) SetRF64_1(v []float64) {
@@ -1174,6 +1240,39 @@ func (x *Value) SetMSS(v map[string]string) {
 
 func (x *Value) SetMSM(v map[string]*Value) {
 	x.xxx_hidden_MSM = v
+}
+
+func (x *Value) SetMI32S(v map[int32]string) {
+	x.xxx_hidden_MI32S = v
+}
+
+func (x *Value) SetMI64S(v map[int64]string) {
+	x.xxx_hidden_MI64S = v
+}
+
+func (x *Value) SetMU32S(v map[uint32]string) {
+	x.xxx_hidden_MU32S = v
+}
+
+func (x *Value) SetMU64S(v map[uint64]string) {
+	x.xxx_hidden_MU64S = v
+}
+
+func (x *Value) SetMSi64S(v map[int64]string) {
+	x.xxx_hidden_MSi64S = v
+}
+
+func (x *Value) SetMUx32S(v map[uint32]string) {
+	x.xxx_hidden_MUx32S = v
+}
+
+func (x *Value) SetMBS(v map[bool]string) {
+	x.xxx_hidden_MBS = v
+}
+
+func (x *Value) SetClosed_1(v Closed) {
+	x.xxx_hidden_Closed_1 = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[2]), 94, 95)
 }
 
 func (x *Value) HasM_1() bool {
@@ -1316,6 +1415,13 @@ func (x *Value) HasOptSi64() bool {
 	return protoimpl.X.Present(&(x.XXX_presence[2]), 67)
 }
 
+func (x *Value) HasClosed_1() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[2]), 94)
+}
+
 func (x *Value) ClearM_1() {
 	x.xxx_hidden_M_1 = nil
 }
@@ -1412,6 +1518,11 @@ func (x *Value) ClearOptSi64() {
 	x.xxx_hidden_OptSi64 = 0
 }
 
+func (x *Value) ClearClosed_1() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[2]), 94)
+	x.xxx_hidden_Closed_1 = Closed_CLOSED_UNSPECIFIED
+}
+
 type Value_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
@@ -1502,6 +1613,22 @@ type Value_builder struct {
 	RSi64_1 []int64
 	MSS     map[string]string
 	MSM     map[string]*Value
+	// Every legal protobuf map key type, so that MapKey's arm table and its
+	// range checks can be exercised against a real descriptor.
+	MI32S  map[int32]string
+	MI64S  map[int64]string
+	MU32S  map[uint32]string
+	MU64S  map[uint64]string
+	MSi64S map[int64]string
+	MUx32S map[uint32]string
+	MBS    map[bool]string
+	// A closed enum (declared in closed.proto), so that the rule "a closed enum
+	// cannot hold a number it does not declare" has something to be checked
+	// against. Editions default to open, which is what Level below is.
+	//
+	// Explicit presence is required: a field with implicit presence may only use
+	// an open enum, since the implicit default has to be representable.
+	Closed_1 *Closed
 }
 
 func (b0 Value_builder) Build() *Value {
@@ -1560,68 +1687,68 @@ func (b0 Value_builder) Build() *Value {
 	x.xxx_hidden_Si32_3 = b.Si32_3
 	x.xxx_hidden_Si64_3 = b.Si64_3
 	if b.OptF64 != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 51, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 51, 95)
 		x.xxx_hidden_OptF64 = *b.OptF64
 	}
 	if b.OptF32 != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 52, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 52, 95)
 		x.xxx_hidden_OptF32 = *b.OptF32
 	}
 	if b.OptI64 != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 53, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 53, 95)
 		x.xxx_hidden_OptI64 = *b.OptI64
 	}
 	if b.OptU64 != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 54, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 54, 95)
 		x.xxx_hidden_OptU64 = *b.OptU64
 	}
 	if b.OptI32 != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 55, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 55, 95)
 		x.xxx_hidden_OptI32 = *b.OptI32
 	}
 	if b.OptUx64 != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 56, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 56, 95)
 		x.xxx_hidden_OptUx64 = *b.OptUx64
 	}
 	if b.OptUx32 != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 57, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 57, 95)
 		x.xxx_hidden_OptUx32 = *b.OptUx32
 	}
 	if b.OptB != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 58, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 58, 95)
 		x.xxx_hidden_OptB = *b.OptB
 	}
 	if b.OptS != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 59, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 59, 95)
 		x.xxx_hidden_OptS = b.OptS
 	}
 	x.xxx_hidden_OptM = b.OptM
 	if b.OptBs != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 61, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 61, 95)
 		x.xxx_hidden_OptBs = b.OptBs
 	}
 	if b.OptU32 != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 62, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 62, 95)
 		x.xxx_hidden_OptU32 = *b.OptU32
 	}
 	if b.OptEnum != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 63, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[1]), 63, 95)
 		x.xxx_hidden_OptEnum = *b.OptEnum
 	}
 	if b.OptSx32 != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[2]), 64, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[2]), 64, 95)
 		x.xxx_hidden_OptSx32 = *b.OptSx32
 	}
 	if b.OptSx64 != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[2]), 65, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[2]), 65, 95)
 		x.xxx_hidden_OptSx64 = *b.OptSx64
 	}
 	if b.OptSi32 != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[2]), 66, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[2]), 66, 95)
 		x.xxx_hidden_OptSi32 = *b.OptSi32
 	}
 	if b.OptSi64 != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[2]), 67, 87)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[2]), 67, 95)
 		x.xxx_hidden_OptSi64 = *b.OptSi64
 	}
 	x.xxx_hidden_RF64_1 = b.RF64_1
@@ -1643,6 +1770,17 @@ func (b0 Value_builder) Build() *Value {
 	x.xxx_hidden_RSi64_1 = b.RSi64_1
 	x.xxx_hidden_MSS = b.MSS
 	x.xxx_hidden_MSM = b.MSM
+	x.xxx_hidden_MI32S = b.MI32S
+	x.xxx_hidden_MI64S = b.MI64S
+	x.xxx_hidden_MU32S = b.MU32S
+	x.xxx_hidden_MU64S = b.MU64S
+	x.xxx_hidden_MSi64S = b.MSi64S
+	x.xxx_hidden_MUx32S = b.MUx32S
+	x.xxx_hidden_MBS = b.MBS
+	if b.Closed_1 != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[2]), 94, 95)
+		x.xxx_hidden_Closed_1 = *b.Closed_1
+	}
 	return m0
 }
 
@@ -1650,7 +1788,7 @@ var File_sample_value_proto protoreflect.FileDescriptor
 
 const file_sample_value_proto_rawDesc = "" +
 	"\n" +
-	"\x12sample/value.proto\x12\x06sample\"\xa1\x13\n" +
+	"\x12sample/value.proto\x12\x06sample\x1a\x13sample/closed.proto\"\xce\x19\n" +
 	"\x05Value\x12\x13\n" +
 	"\x05f64_1\x18e \x01(\x01R\x04f641\x12\x13\n" +
 	"\x05f32_1\x18f \x01(\x02R\x04f321\x12\x13\n" +
@@ -1738,25 +1876,66 @@ const file_sample_value_proto_rawDesc = "" +
 	"\br_si32_1\x18\xf9\a \x03(\x11R\x06rSi321\x12\x19\n" +
 	"\br_si64_1\x18\xfa\a \x03(\x12R\x06rSi641\x12+\n" +
 	"\x05m_s_s\x18\x9dU \x03(\v2\x16.sample.Value.MSSEntryR\x03mSS\x12+\n" +
-	"\x05m_s_m\x18\x9fU \x03(\v2\x16.sample.Value.MSMEntryR\x03mSM\x1a6\n" +
+	"\x05m_s_m\x18\x9fU \x03(\v2\x16.sample.Value.MSMEntryR\x03mSM\x121\n" +
+	"\am_i32_s\x18\x97U \x03(\v2\x18.sample.Value.MI32SEntryR\x05mI32S\x121\n" +
+	"\am_i64_s\x18\x99U \x03(\v2\x18.sample.Value.MI64SEntryR\x05mI64S\x121\n" +
+	"\am_u32_s\x18\xa1U \x03(\v2\x18.sample.Value.MU32SEntryR\x05mU32S\x121\n" +
+	"\am_u64_s\x18\x98U \x03(\v2\x18.sample.Value.MU64SEntryR\x05mU64S\x124\n" +
+	"\bm_si64_s\x18\xa6U \x03(\v2\x19.sample.Value.MSi64SEntryR\x06mSi64S\x124\n" +
+	"\bm_ux32_s\x18\x9bU \x03(\v2\x19.sample.Value.MUx32SEntryR\x06mUx32S\x12+\n" +
+	"\x05m_b_s\x18\x9cU \x03(\v2\x16.sample.Value.MBSEntryR\x03mBS\x120\n" +
+	"\bclosed_1\x18w \x01(\x0e2\x0e.sample.ClosedB\x05\xaa\x01\x02\b\x01R\aclosed1\x1a6\n" +
 	"\bMSSEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aE\n" +
 	"\bMSMEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12#\n" +
-	"\x05value\x18\x02 \x01(\v2\r.sample.ValueR\x05value:\x028\x01*:\n" +
+	"\x05value\x18\x02 \x01(\v2\r.sample.ValueR\x05value:\x028\x01\x1a8\n" +
+	"\n" +
+	"MI32SEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a8\n" +
+	"\n" +
+	"MI64SEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a8\n" +
+	"\n" +
+	"MU32SEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a8\n" +
+	"\n" +
+	"MU64SEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a9\n" +
+	"\vMSi64SEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x12R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a9\n" +
+	"\vMUx32SEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\aR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a6\n" +
+	"\bMBSEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\bR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*:\n" +
 	"\x05Level\x12\x15\n" +
 	"\x11LEVEL_UNSPECIFIED\x10\x00\x12\f\n" +
 	"\bLEVEL_LO\x10\x01\x12\f\n" +
 	"\bLEVEL_HI\x10\x02B9Z2github.com/lesomnus/protobuf-patch/internal/sample\x92\x03\x02\b\x02b\beditionsp\xe8\a"
 
 var file_sample_value_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sample_value_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_sample_value_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_sample_value_proto_goTypes = []any{
 	(Level)(0),    // 0: sample.Level
 	(*Value)(nil), // 1: sample.Value
 	nil,           // 2: sample.Value.MSSEntry
 	nil,           // 3: sample.Value.MSMEntry
+	nil,           // 4: sample.Value.MI32SEntry
+	nil,           // 5: sample.Value.MI64SEntry
+	nil,           // 6: sample.Value.MU32SEntry
+	nil,           // 7: sample.Value.MU64SEntry
+	nil,           // 8: sample.Value.MSi64SEntry
+	nil,           // 9: sample.Value.MUx32SEntry
+	nil,           // 10: sample.Value.MBSEntry
+	(Closed)(0),   // 11: sample.Closed
 }
 var file_sample_value_proto_depIdxs = []int32{
 	1,  // 0: sample.Value.m_1:type_name -> sample.Value
@@ -1771,12 +1950,20 @@ var file_sample_value_proto_depIdxs = []int32{
 	0,  // 9: sample.Value.r_enum_1:type_name -> sample.Level
 	2,  // 10: sample.Value.m_s_s:type_name -> sample.Value.MSSEntry
 	3,  // 11: sample.Value.m_s_m:type_name -> sample.Value.MSMEntry
-	1,  // 12: sample.Value.MSMEntry.value:type_name -> sample.Value
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	4,  // 12: sample.Value.m_i32_s:type_name -> sample.Value.MI32SEntry
+	5,  // 13: sample.Value.m_i64_s:type_name -> sample.Value.MI64SEntry
+	6,  // 14: sample.Value.m_u32_s:type_name -> sample.Value.MU32SEntry
+	7,  // 15: sample.Value.m_u64_s:type_name -> sample.Value.MU64SEntry
+	8,  // 16: sample.Value.m_si64_s:type_name -> sample.Value.MSi64SEntry
+	9,  // 17: sample.Value.m_ux32_s:type_name -> sample.Value.MUx32SEntry
+	10, // 18: sample.Value.m_b_s:type_name -> sample.Value.MBSEntry
+	11, // 19: sample.Value.closed_1:type_name -> sample.Closed
+	1,  // 20: sample.Value.MSMEntry.value:type_name -> sample.Value
+	21, // [21:21] is the sub-list for method output_type
+	21, // [21:21] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_sample_value_proto_init() }
@@ -1784,13 +1971,14 @@ func file_sample_value_proto_init() {
 	if File_sample_value_proto != nil {
 		return
 	}
+	file_sample_closed_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sample_value_proto_rawDesc), len(file_sample_value_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   3,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

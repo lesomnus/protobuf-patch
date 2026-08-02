@@ -2,6 +2,8 @@ edition = "2023";
 
 package sample;
 
+import "sample/closed.proto";
+
 option features.field_presence = IMPLICIT;
 option go_package = "github.com/lesomnus/protobuf-patch/internal/sample";
 
@@ -98,6 +100,24 @@ message Value {
 
   map<string, string> m_s_s = 10909;
   map<string, Value> m_s_m = 10911;
+
+  // Every legal protobuf map key type, so that MapKey's arm table and its
+  // range checks can be exercised against a real descriptor.
+  map<int32, string> m_i32_s = 10903;
+  map<int64, string> m_i64_s = 10905;
+  map<uint32, string> m_u32_s = 10913;
+  map<uint64, string> m_u64_s = 10904;
+  map<sint64, string> m_si64_s = 10918;
+  map<fixed32, string> m_ux32_s = 10907;
+  map<bool, string> m_b_s = 10908;
+
+  // A closed enum (declared in closed.proto), so that the rule "a closed enum
+  // cannot hold a number it does not declare" has something to be checked
+  // against. Editions default to open, which is what Level below is.
+  //
+  // Explicit presence is required: a field with implicit presence may only use
+  // an open enum, since the implicit default has to be representable.
+  Closed closed_1 = 119 [features.field_presence = EXPLICIT];
 }
 
 enum Level {

@@ -1,0 +1,23 @@
+edition = "2023";
+
+package sample;
+
+// Closed enums live in their own file because the feature has to be declared
+// at FILE level to be visible at runtime.
+//
+// protobuf-go v1.36.11 parses `options.features` when seeding a File, Message,
+// Field, and Extension descriptor, but not an Enum one — Enum.unmarshalSeed
+// only inherits from its parent (internal/filedesc/desc_init.go). So an
+// enum-level `option features.enum_type = CLOSED;` is present in the
+// descriptor proto and still leaves EnumDescriptor.IsClosed() reporting false.
+// Declaring it here makes the enums below genuinely closed to the runtime,
+// which is what the schema's closed-enum rule is checked against.
+option features.enum_type = CLOSED;
+
+option go_package = "github.com/lesomnus/protobuf-patch/internal/sample";
+
+enum Closed {
+  CLOSED_UNSPECIFIED = 0;
+  CLOSED_LO = 1;
+  CLOSED_HI = 2;
+}
