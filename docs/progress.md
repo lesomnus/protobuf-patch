@@ -10,8 +10,8 @@
 | P1 빌더 | ✅ | `patch/build.go`, `buildkey.go`, `buildvalue.go` |
 | P2 구조 검증 | ✅ | `patch/validate.go` |
 | P3 값 모델 | ✅ | `patch/value.go` |
-| P4 주소 해석 | 🟨 | `patch/resolve.go` (descriptor 부분 완료) |
-| P5 적용 | ⬜ | `patchproto/`, `conformance/` |
+| P4 주소 해석 | ✅ | `patch/resolve.go`, `patchproto/cont.go` |
+| P5 적용 | 🟨 | `patchproto/` (적합성 코퍼스 남음) |
 | P6 RFC 6902 변환 | ⬜ | `jsonpatch/` |
 
 ---
@@ -216,3 +216,43 @@ func NormalizeRange(r *patchpb.Range, length int) (int, int)
 `TestNormalizeRangeMatchesTheSchema`가 `path.proto`의 워크드 예제 6개를 그대로 돌린다. 명세가 예제이므로 예제가 테스트다.
 
 `HasBegin()`/`HasEnd()`로 분기한다 — 구 구현은 `end <= 0`으로 분기해 **명시적 `[0,0)`이 리스트 전체를 선택했다.** `TestNormalizeRangeReadsPresence`가 `[0,0)` / `[0,_)` / `[_,0)` 셋을 구별함을 고정한다. 그리고 `TestNormalizeRangeNeverWraps`가 구 스키마 주석이 주장하던 `[-2,2)` = "마지막 둘 + 처음 둘"의 wrap-around가 없음을 확인한다.
+
+---
+
+## P5 — 적용 🟨
+
+`patchproto/apply.go` · `cont.go` · `container.go` · `value.go`
+
+```go
+func Apply[T proto.Message](m T, p *patchpb.Patch, opts ...Option) (T, error)
+```
+
+7 kind × 4 scope가 모두 동작한다. 적합성 코퍼스(`conformance/`)는 아직이다.
+
+### 원자성 — in-place API가 없다
+
+`Apply`는 사본에 적용하고 성공했을 때만 반환한다. `TestApplyIsAtomic`이 세 가지를 고정한다: 뒤 엔트리가 실패하면 앞 엔트리의 변경이 남지 않는다, 입력이 제자리에서 변하지 않는다, `test`만 담은 Patch는 아무것도 바꾸지 않는다.
+
+`wantErr` 헬퍼가 **모든 실패 케이스마다** 입력 무손상을 확인한다 — 원자성이 특정 테스트가 아니라 모든 오류 경로의 불변식이다.
+
+### 구현이 스키마 모순을 찾아냈다
+
+`assign`/map key 표는 *"없으면 생성한다"*였는데 vacancy 규칙은 *"없는 맵 키는 vacant이고 기본은 실패"*였다. **둘 다 참일 수 없다** — 그러면 맵 항목을 만들 방법이 없다. `TestMapOps/assign_creates`가 이걸 잡았다.
+
+원인은 서로 다른 두 상황을 한 단어로 부른 것이다:
+
+| | 뜻 | 처리 |
+|---|---|---|
+| **NO SLOT** | 주소가 아무 위치도 가리키지 않음 — 선언되지 않은 필드, 범위 밖 인덱스 | 모든 연산에 대해 missing target |
+| **EMPTY SLOT** | 위치는 있는데 내용이 없음 — 항목 없는 맵 키 | `remove`·`nest`에만 missing. 쓰기 연산은 채운다 |
+| **PRESENCE** | 선언된 필드가 설정되었는가 | missing이 아님. `exists`가 보고하는 것 |
+
+선언된 메시지 필드는 미설정이어도 **유효한 위치**다. 그래서 `remove`가 동작하고 `exists=false`가 성립한다. 스키마에 이 구분을 반영하고 `vacant`라는 용어를 `missing target`으로 통일했다 (`.proto`에 `vacant` 표현이 0개 남았다).
+
+### 그 밖에 구현이 강제한 것
+
+- **`probe`는 presence를 실시간으로 읽는다.** 해석 시점에 굳혀두면 `test exists`가 틀린 답을 낸다 — 범위 밖 인덱스의 `NormalizeIndex`가 `idx=0`을 돌려주므로 `noSlot` 표시 없이는 0번 원소를 검사하게 된다.
+- **`move`/`copy`는 메시지 값을 복제한다.** 아니면 소스를 지울 때 목적지까지 비워진다. `TestMoveAndCopy/copying_a_message_does_not_alias_it`가 고정한다.
+- **컨테이너 `assign`은 staged 메시지에 먼저 채운다.** 선언되지 않은 필드를 가리키는 값이 오면 **비우기 전에** 실패해야 한다. 구 구현은 먼저 지우고 나서 해석 못한 키를 버려서 부분 데이터 손실을 만들었다.
+- **`remove`는 인덱스 내림차순으로 지운다.** pre-entry 인덱스를 유지하기 위해서다.
+- **`spliceInto`는 리스트를 한 번에 재구성한다.** targets `[0, 2]`가 `[a b c]`에서 `[Z a b Z c]`가 되도록 — 첫 삽입이 둘째를 밀지 않는다.

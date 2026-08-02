@@ -23,16 +23,30 @@ option go_package = "github.com/lesomnus/protobuf-patch/patchpb";
 //
 // Using an arm that does not match the container is an unconditional error.
 //
-// VACANCY. A Key that is well-formed for its container but names nothing that
-// currently exists — a field the message does not declare, an index outside
-// [0, len), an absent map key — resolves to a VACANT location. Vacancy is not
-// itself a failure; what happens to a vacant location is decided by where the
-// Key appears and by the operation:
+// VACANCY. A Key can fail to reach existing content in two different ways, and
+// the difference decides what an operation may do about it.
 //
-//   - In `Selector.key` under `test`: the vacancy is READ. This is exactly
-//     what `Test.want.exists` reports, and `Entry.on_missing` never applies.
-//   - In `Selector.key` under any other kind: it is a missing target, governed
-//     by `Entry.on_missing` (default: fail).
+//   - NO SLOT — the address names no position at all: a field the message does
+//     not declare, or an index outside [0, len). Nothing can ever be written
+//     there, so every operation treats it as a MISSING TARGET.
+//   - EMPTY SLOT — the address names a position that exists but holds nothing:
+//     a map key with no entry under it. Every key of the map's declared type
+//     is a valid address, so `assign` fills one (this is how a map entry comes
+//     into existence at all) and `insert` requires it to be empty. Only
+//     `remove` and `nest`, which need something already there, treat it as a
+//     missing target.
+//
+// A declared message field is neither. It always exists as a position; whether
+// it currently holds a value is PRESENCE, which is what `Test.want.exists`
+// reports and which no operation treats as a missing target.
+//
+// A missing target is not itself a failure. What happens to one depends on
+// where the Key appears:
+//
+//   - In `Selector.key` under `test`: it is READ. This is exactly what
+//     `Test.want.exists` reports, and `Entry.on_missing` never applies.
+//   - In `Selector.key` under any other kind: `Entry.on_missing` decides
+//     (default: fail).
 //   - In `Path.segments` or in `Location`: an unconditional error.
 //     `Entry.on_missing` reaches only `Selector` targets.
 //
@@ -50,7 +64,7 @@ message Key {
     // This holds for EVERY operation — there is no per-operation off-by-one.
     // "One past the end" is not expressible here; use `Selector.append`.
     //
-    // An index outside `[0, len)` after normalization is VACANT (see above).
+    // An index outside `[0, len)` after normalization names NO SLOT (above).
     sint64 index = 2;
 
     // An entry of a map.
@@ -73,7 +87,8 @@ message Key {
 //     never subject to `Entry.on_missing`. Disagreement means the Patch was
 //     authored against a different schema; that must never be skipped.
 //
-// If no identifier resolves to a declared field, the Key is VACANT.
+// If no identifier resolves to a declared field, the Key names NO SLOT (see
+// `Key`), which every operation treats as a missing target.
 //
 // A Field with no identifier set is an error. A set-but-empty `name` or
 // `json_name` is an error, since neither is a legal protobuf field name.
@@ -110,7 +125,7 @@ message Field {
 // The carried value MUST also lie within the declared key type's range: `i`
 // against a `map<int32, V>` must lie in [-2^31, 2^31), `u` against a
 // `map<uint32, V>` in [0, 2^32). A value outside that range is an ERROR — it
-// is never truncated, and it is never a merely vacant key that
+// is never truncated, and it is never a merely missing key that
 // `Entry.on_missing` can skip.
 //
 // The empty string is a legal `s` key and is unambiguous here, because the
@@ -132,11 +147,17 @@ message MapKey {
 // never reach a sibling or an ancestor, so a nested Delta cannot escape the
 // container that `nest` handed it.
 //
-// Every container along the path must already exist. A path that descends into
-// an unset message, list, or map — or through a vacant `Key` — is an error. A
-// Patch never auto-creates intermediate containers, and `Entry.on_missing`
-// never applies to a Path. (Create containers with an explicit `assign` in an
-// earlier entry.)
+// Every container along the path must already exist, and a path that descends
+// through a `Key` that reaches nothing is an error. A Patch never auto-creates intermediate
+// containers, and `Entry.on_missing` never applies to a Path. (Create a
+// container with an explicit `assign` in an earlier entry.)
+//
+// "Exist" is presence, not contents. A singular message field must be SET; an
+// unset one is an error, because descending into it would have to create it.
+// A repeated or map field has no presence in protobuf and therefore always
+// exists as a container: an empty list or map may be descended into, and the
+// operation simply finds nothing there. This is what lets a whole empty list
+// be filled by addressing it with `container` scope.
 message Path {
   repeated Key segments = 1;
 }
@@ -186,8 +207,8 @@ message Selector {
 //
 // `begin` and `end` share one normalization rule; unset and 0 are distinct.
 //
-// A Range never produces a vacant location: it selects only indices that
-// exist. `Entry.on_missing` therefore has no effect on a Range.
+// A Range never produces a missing target: it selects only indices that exist,
+// so `Entry.on_missing` has no effect on one.
 message Range {
   // Inclusive lower bound. Unset means 0.
   sint64 begin = 1;
@@ -219,7 +240,7 @@ message Location {
   }
 
   // The source position within that container. Required; an unset `key` is an
-  // error, and a vacant `key` is an error (never skipped).
+  // error, and a `key` that reaches nothing is an error (never skipped).
   Key key = 2;
 }
 

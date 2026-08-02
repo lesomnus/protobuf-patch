@@ -23,11 +23,11 @@ const (
 type OnMissing int32
 
 const (
-	// A vacant target aborts the Patch. This is the ONLY encoding of "fail" —
+	// A missing target aborts the Patch. This is the ONLY encoding of "fail" —
 	// there is deliberately no explicit FAIL value, so the meaning has exactly
 	// one encoding and the safe behavior is the zero value.
 	OnMissing_ON_MISSING_UNSPECIFIED OnMissing = 0
-	// A vacant target is skipped. The author opted into this on the wire; a
+	// A missing target is skipped. The author opted into this on the wire; a
 	// reader never chooses it.
 	OnMissing_ON_MISSING_SKIP OnMissing = 1
 )
@@ -126,16 +126,16 @@ func (x OnMissing) Number() protoreflect.EnumNumber {
 //   - A `MapKey` value outside the declared key type's range.
 //   - A `Value.e` that the target's CLOSED enum does not declare.
 //   - `Entry.path` that does not reach an existing container: descending into
-//     an unset message, list, or map, or through a vacant `Key`.
-//     `Entry.on_missing` never applies to `Entry.path`.
+//     an unset singular message field, or through a `Key` that names no slot
+//     or an empty one. `Entry.on_missing` never applies to `Entry.path`.
 //   - A `test` that does not hold.
 //   - A `test` entry whose selectors resolve to zero locations, or whose
 //     `on_missing` is set to anything but the default. A `test` must never be
 //     able to pass vacuously.
-//   - A `move`/`copy` whose `Location` is vacant or does not resolve, or whose
-//     source and targets differ in kind or in declared type.
+//   - A `move`/`copy` whose `Location` reaches nothing, or whose source and
+//     targets differ in kind or in declared type.
 //
-// The ONLY tolerated failure is a VACANT target (see `Key`), and only in
+// The ONLY tolerated failure is a MISSING TARGET (see `Key`), and only in
 // `Entry.targets`, only for kinds other than `test`, and only when the author
 // opted in on the wire via `Entry.on_missing`. Tolerance is always a recorded
 // decision, never a reader's default.
@@ -392,9 +392,12 @@ func (b0 Delta_builder) Build() *Delta {
 // Note that -1 means "the last element" for EVERY kind; appending has its own
 // selector rather than overloading a negative index.
 //
-// VACANCY is a property of the target, not of the kind: a vacant target (see
-// `Key`) is governed by `on_missing` whatever `Entry.kind` is — except `test`,
-// which READS vacancy instead of being governed by it.
+// A MISSING TARGET (see `Key`) is governed by `on_missing`, whatever the kind,
+// with one exception in each direction. `test` READS a missing target instead
+// of being governed by it, which is what makes `exists = false` satisfiable.
+// And an EMPTY SLOT — a map key with no entry — is missing only for `remove`
+// and `nest`, which need something already there; the writing kinds fill it,
+// which is how a map entry is created at all.
 //
 // ======================= OPERATION SEMANTICS =====================
 //
@@ -406,7 +409,9 @@ func (b0 Delta_builder) Build() *Delta {
 //	message field  clear the field. For a field without presence, restore the
 //	               default.
 //	list index     remove the element; the list shrinks.
-//	map key        delete the entry.
+//	map key        delete the entry. A key with no entry under it is a
+//	               missing target (see `Key`), so by default this fails rather
+//	               than quietly deleting nothing.
 //	container      message: clear every declared field. list: empty it.
 //	               map: empty it.
 //
@@ -416,7 +421,7 @@ func (b0 Delta_builder) Build() *Delta {
 //	selectors resolve to zero locations is an error, so a test can never pass
 //	vacuously.
 //	`want.value`   the target exists and equals the value. Kind and declared
-//	               type must match exactly; a vacant target fails.
+//	               type must match exactly; a missing target fails.
 //	`want.exists`  true: the target is present. false: it is absent.
 //	               message field: presence as protobuf defines it — an
 //	               explicit-presence field that is set, or a field without
@@ -451,7 +456,8 @@ func (b0 Delta_builder) Build() *Delta {
 //	message field  set the field.
 //	list index     overwrite the element in place. The index must be in range;
 //	               assign never grows a list (use insert with `append`).
-//	map key        set the entry, creating it if absent.
+//	map key        set the entry, creating it if absent — an empty slot is
+//	               what assign is for, not a missing target.
 //	container      replace wholesale: clear the container, then apply `value`.
 //	               The value's kind must match the container (`m`/`l`/`map`).
 //
@@ -945,9 +951,9 @@ type Entry_builder struct {
 	// The container reached by `path`, as a whole.
 	Container *Container
 	// -- end of xxx_hidden_Scope
-	// How to treat a VACANT target (see `Key`). Defaults to fail.
+	// How to treat a MISSING target (see `Key`). Defaults to fail.
 	//
-	// This governs ONLY vacant `Selector` targets, and only for kinds other than
+	// This governs ONLY missing `Selector` targets, and only for kinds other than
 	// `test`. It never applies to `Entry.path`, to a `Location`, to unrecognized
 	// arms or unknown fields, to kind or declared-type mismatches, to a `Field`
 	// whose identifiers disagree, or to a failed `test`.
