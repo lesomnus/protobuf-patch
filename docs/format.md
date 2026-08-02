@@ -140,9 +140,11 @@ not.
 ```proto
 message Selector {
   oneof kind {
-    Key    key    = 1;   // exactly one; legal everywhere
-    Range  range  = 2;   // a span of list elements
-    Append append = 3;   // one past the last element
+    Key        key          = 1;   // exactly one; legal everywhere
+    Range      range        = 2;   // a span of list elements
+    Append     append       = 3;   // one past the last element
+    Oneof      oneof_member = 4;   // whichever member of a oneof is set
+    EveryEntry every_entry  = 5;   // every entry of a map
   }
 }
 ```
@@ -152,6 +154,64 @@ Multi-valued segments live in `Selector`, which appears only in `targets`.
 
 `Append` is the RFC 6901 `-` token. It is legal only with `insert`, `move`, and
 `copy` — the operations that can grow a list.
+
+### oneof_member — whichever member is set
+
+```proto
+message Oneof { string name = 1; }
+```
+
+Resolves to the member of that oneof currently set, or to **nothing** when none
+is. Zero or one location is why it is a `Selector` and not a `Key`: `Key`
+promises exactly one, and under that promise `assign` would need the value to
+say which member it was for — undecidable as soon as two members share a type.
+
+As a selector no operation needs a new definition:
+
+| kind | effect |
+| ---- | ------ |
+| `remove` | clear the set member; nothing set selects nothing, so the entry is a no-op |
+| `assign` | overwrite the set member in place; the arm must match **that member's** type |
+| `insert` | the set member is occupied, so this fails |
+| `move`/`copy` | write to the set member |
+| `nest` | descend into the set member |
+| `test` | reads the **oneof itself**, so `exists: false` is satisfiable |
+
+That last row is the carve-out `test` already has for a missing target, applied
+here. Without it, asserting that a oneof is clear would be a test resolving to
+zero locations, which the anti-vacuity rule forbids.
+
+Prefer this to enumerating the members: an enumeration silently stops covering a
+member **added to the oneof later**, and this does not.
+
+A name the message does not declare is a missing target, like an undeclared
+field. A **synthetic** oneof — what proto3 generates per `optional` field — is
+an error, because it would be a second way to spell what `Key.field` already
+addresses.
+
+### every_entry — every entry of a map
+
+```proto
+message EveryEntry {}
+```
+
+Map-only. A `Range` with both bounds unset already selects every element of a
+list, and container scope already addresses a message as a whole; accepting it
+there too would give one capability two spellings.
+
+It exists because a map's **keys are data**. A patch that has to name them can
+only be written by something that already knows them, which rules out a stored
+document that changes every entry. Under `nest` it is what makes that
+expressible at all:
+
+```
+every_entry + nest{ assign s_2 }
+  {a: {s_1: one}, b: {s_1: two}}
+  → {a: {s_1: one, s_2: added}, b: {s_1: two, s_2: added}}
+```
+
+An empty map yields no locations — a defined empty answer, not a miss, so
+`on_missing` never applies and a `test` over one asserts nothing.
 
 ### Range
 
@@ -268,6 +328,39 @@ vacuously.
 
 For a container, `exists: true` means non-empty.
 
+#### What "equals" means
+
+This is the only comparison the format performs, so it is defined rather than
+left to whatever the implementation language calls equality. Left undefined, the
+three engines here had each invented a different rule.
+
+| | |
+| --- | --- |
+| kind and declared type | must match first; comparing across types is an **error**, not an unequal answer |
+| integers, booleans, strings | equal values |
+| `x` | equal byte sequences |
+| `e` | equal numbers, in the same enum type |
+| `f32`/`f64` | equal IEEE values, **except that NaN equals NaN**; `-0.0` equals `+0.0` |
+| `m` | **exact, not subset** |
+| `l` | equal lengths, elementwise in order |
+| `map` | equal key sets, equal values under each key |
+| unknown fields on the target | **take no part**, at any depth |
+
+The last two rows are the ones that bite.
+
+**Exact, not subset** means a field absent from `fields` asserts that the target
+does not have it set. For a subset assertion, test the fields individually or
+`nest` a delta of tests.
+
+**Unknown fields take no part** because the format preserves them precisely so
+that a patch never discards data it did not name — and a `Value` has no way to
+mention one. Counting them would make every `test` against a message carrying
+any unknown field fail, with no value that could ever pass.
+
+NaN is exempt from IEEE for a related reason: a test asserts what a document
+holds, not an arithmetic predicate. Under IEEE inequality a patch could `assign`
+a NaN and then be unable to assert the value it had just written.
+
 ### insert — create without overwriting
 
 An existing value is an error; that is what separates insert from assign.
@@ -324,7 +417,11 @@ treated as a no-op:
 - an unset required oneof or field; empty `Targets.selectors` or `Delta.entries`
 - two selectors resolving to the same location
 - a `Field` with no identifier, or whose identifiers disagree
+- a `Field.number` inside an **extension range** of the target message
 - an arm not legal for the container or field it lands on
+- `oneof_member` against a non-message, or naming a synthetic oneof
+- `every_entry` against a non-map
+- a document nesting deeper than the reader will follow
 - a `MapKey` outside the declared key type's range
 - a `Value.e` a closed enum does not declare
 - a `path` that does not reach an existing container
@@ -336,6 +433,34 @@ an unrecognized oneof arm as "not set", so the unknown-field set is the only
 thing separating "the producer omitted it" from "the producer used an arm from a
 newer revision". A reader that skips the scan will silently apply a subset of a
 document it does not understand.
+
+### Extensions are refused, not reported absent
+
+A `Field.number` falling in one of the target message's extension ranges is an
+error. It is deliberately **not** vacancy, because an extension is data the
+message really holds — calling it a missing target would let `exists: false`
+succeed about a value that is present, and let `on_missing` silently skip an
+operation meant to change it. Both are exactly what the format exists to
+prevent.
+
+An extension the reader has no descriptor for arrives as an unknown field on the
+target instead, and the preservation rule already covers it.
+
+### Depth is bounded
+
+A patch recurses in two independent places — `nest` chains deltas, and a `Value`
+nests through `m`, `l`, and `map` — and both are cheap to write and expensive to
+read. An implementation **must** bound both and fail closed past the bound.
+
+The number is implementation-defined; this one uses **10** for `nest` and **32**
+for a value literal, overridable per call. A value has to be more generous
+because a literal mirrors the shape of the message it is assigned to rather than
+the author's convenience — a `google.protobuf.Struct` spends about three levels
+per level of the JSON it carries.
+
+One consequence, stated so it is not a surprise: a document one reader accepts,
+another may refuse. That is the same shape as `min_reader_revision`, and it only
+ever moves toward refusal.
 
 ### Atomicity
 

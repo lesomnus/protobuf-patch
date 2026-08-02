@@ -23,6 +23,11 @@ updated, err := patchproto.Apply(user, p)
 
 ## What it does
 
+**Covers protobuf's grammar.** Fields by name, JSON name, or number; list
+elements, spans, and append; map entries and every entry of a map; whichever
+member of a `oneof` is set. What it cannot address — extensions, unknown fields
+— it refuses rather than reports absent.
+
 **Applies patches, atomically.** `Apply` works on a copy and returns it only on
 success, so a failure — a test that does not hold, a field that has moved, an
 operation from a newer revision — leaves the input untouched. There is
@@ -37,6 +42,9 @@ decision.
 mismatch is an error, never a widened, narrowed, or truncated write.
 
 **Does not generate.** There is no `Diff`; a patch is built by hand.
+
+**Bounds what it will read.** Both places a document recurses are bounded, so a
+few kilobytes cannot cost gigabytes.
 
 ## Targets
 
@@ -55,8 +63,8 @@ out, err     := patchjson.Apply(doc, p)     // a JSON document
 Each engine enforces as much of the format as its target can express and
 **refuses what it cannot check** rather than guessing. Go's static types recover
 most of what JSON loses, so `patchstruct` sits much closer to the reference than
-`patchjson` does — of the 42 conformance cases, `patchstruct` agrees on 38 and
-`patchjson` on 29. Every remaining disagreement is declared with a cause and
+`patchjson` does — of the 73 conformance cases, `patchstruct` agrees on 58 and
+`patchjson` on 42. Every remaining disagreement is declared with a cause and
 tested, so a new one cannot appear silently. See [engines.md](docs/engines.md).
 
 ## Documentation
@@ -78,7 +86,7 @@ The normative source is the comments in [`proto/patch/`](proto/patch/). The
 | File | Contents |
 | ---- | -------- |
 | [`patch.proto`](proto/patch/patch.proto) | `Patch`, `Delta`, `Entry`, the seven operations, the failure contract |
-| [`path.proto`](proto/patch/path.proto) | Addressing: `Key`, `Field`, `MapKey`, `Path`, `Selector`, `Range`, `Location` |
+| [`path.proto`](proto/patch/path.proto) | Addressing: `Key`, `Field`, `MapKey`, `Path`, `Selector`, `Range`, `Oneof`, `EveryEntry`, `Location` |
 | [`value.proto`](proto/patch/value.proto) | Literals: `Value`, `MessageValue`, `ListValue`, `MapValue` |
 
 Generated Go bindings are in [`patchpb/`](patchpb/).
@@ -98,7 +106,8 @@ These five decide every case where the format had a choice.
 4. **Single-valued and multi-valued addressing are different types.** `Key`
    names exactly one location and is the only thing a `Path` may contain;
    `Selector` names zero or more and appears only in `Entry.targets`.
-5. **The `.proto` is the specification.** Every rule lives in its comments.
+5. **The `.proto` is the specification.** Every rule lives in its comments —
+   including what "equal" means, which is the only comparison the format makes.
 
 The reasoning behind each is in [decisions.md](docs/decisions.md).
 

@@ -132,6 +132,46 @@ patch.SpanAll()       // everything             → []
 bound is **set**, not by its value. Separate constructors make that impossible
 to get wrong.
 
+### Whichever member of a oneof is set
+
+```go
+patch.Oneof("source")
+```
+
+Resolves to the member currently set, or to nothing when none is — so `Remove()`
+on an already-clear oneof is a no-op rather than a failure, exactly as an empty
+`Span` is. Under `Test` the oneof itself is read, so `Exists(false)` asserts
+that no member is set.
+
+```go
+patch.Target(patch.Oneof("source")).Remove()          // clear whichever is set
+patch.Target(patch.Oneof("source")).Exists(false)     // assert none is
+patch.Target(patch.Oneof("source")).Assign(patch.Str("x"))  // overwrite it in place
+```
+
+Prefer it to enumerating the members: an enumeration silently stops covering a
+member **added to the oneof later**.
+
+It is a `Selector`, not a `Keyer`, so it cannot appear in `In(...)` or a
+`From(...)` — those need exactly one location.
+
+### Every entry of a map
+
+```go
+patch.Target(patch.EveryEntry()).In(patch.Name("m_s_m")).Nest(
+    patch.Target(patch.Name("s_2")).Assign(patch.Str("added")),
+)
+// {a: {s_1: one}, b: {s_1: two}}
+// → {a: {s_1: one, s_2: added}, b: {s_1: two, s_2: added}}
+```
+
+Map-only: `SpanAll()` already covers a list and `Container()` a message. It is
+what makes a stored patch able to change every entry of a map whose keys it does
+not know.
+
+An empty map yields no locations, so the entry is a no-op — and a `Test` over
+one asserts nothing, which is an error.
+
 ### Map keys
 
 The arm must match the map's declared key type; it is never coerced.
@@ -185,6 +225,16 @@ patch.Map(patch.E(patch.MapStr("k"), patch.Str("v")))
 ```
 
 There is no null. To clear, use `Remove()`; to assert absence, `Exists(false)`.
+
+### Equality, for Test
+
+`Test(v)` compares by the format's own rule, not Go's. Two clauses are worth
+knowing: a message compares **exactly**, so a field absent from the value
+asserts the target does not have it set; and **NaN equals NaN**, so a patch can
+assert a float it just wrote.
+
+Unknown fields on the target take no part at any depth — they are preserved
+rather than compared, and no value could mention one anyway.
 
 ## Operations
 
@@ -271,6 +321,20 @@ and it must not be handed `remove everything`.
 What types cannot catch — an `Append()` given to an operation that cannot grow a
 list, an empty field name, field number zero, a value with no arm — accumulates
 and surfaces at `New`.
+
+## Limits
+
+Applying bounds how deep into the document the engine will recurse: 10 levels of
+`Nest`, 32 of a value literal. Both are `patch.DefaultLimits` and both are
+overridable when a producer legitimately sends deeper:
+
+```go
+patchproto.Apply(m, p, patchproto.WithLimits(patch.Limits{ValueDepth: 64}))
+```
+
+Past the bound the document is refused with `CodeTooDeep` rather than followed.
+The bound exists because both places recurse and a few tens of kilobytes can
+describe hundreds of thousands of levels.
 
 ## Errors
 

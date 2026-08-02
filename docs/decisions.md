@@ -126,6 +126,44 @@ different ways: a first-match disjunction that never failed, a name-only lookup
 that ignored `json_name` entirely, and a `Match` that ANDed the conjuncts but was
 structurally unsatisfiable.
 
+### A oneof is a `Selector`, not a `Key`
+
+**A oneof names zero or one location, and `Key` promises exactly one.**
+
+The first attempt put it in `Key`, and that made `assign` undefined: a value
+assigned to a oneof would have had to say which member it was for, and two
+members can share a type. What looked like a hole in the operation matrix — a
+construct that only supported `remove` and `test` — was an artifact of the wrong
+placement.
+
+As a `Selector` nothing new has to be defined at all. It resolves to the member
+currently set, or to nothing, and every operation already says what it does with
+zero or one location. `remove` on a clear oneof is a no-op for the same reason
+an empty `Range` is.
+
+`test` gets one line of its own, and it is a line `test` already had: it reads
+the oneof itself rather than the member, so `exists: false` is satisfiable. That
+is the same carve-out that lets `test` read a missing target instead of being
+governed by it.
+
+A **synthetic** oneof is refused, because allowing it would be a second spelling
+of what `Key.field` already addresses — see [one integer per
+namespace](#one-integer-per-namespace) for the same instinct applied elsewhere.
+
+### `every_entry` is map-only
+
+**A map's keys are data; a list's and a message's are not.**
+
+A patch that has to name a map's keys can only be written by something that
+already knows them, which rules out the ordinary case of a stored document that
+changes every entry. That is the gap `every_entry` fills, and `nest` under it is
+what makes "edit inside every entry" expressible at all.
+
+It is refused on a list and on a message, even though both would be easy to
+define, because `Range` with both bounds unset already selects every element of
+a list and `Entry.container` already addresses a message as a whole. One
+capability, one spelling.
+
 ### `Key` and `Selector` are different types
 
 `Key` names exactly one location and is the only thing a `Path` may contain.
@@ -254,6 +292,70 @@ skipped, and a test whose selectors reach zero locations is an error.
 A `test` exists only to make conditional application safe. The previous
 implementation returned nil for a test against a nonexistent field, so a guard
 whose address had drifted reported success.
+
+### Equality is defined, not delegated
+
+**`test` is the only comparison the format performs, so leaving "equals"
+undefined left every engine to invent its own.**
+
+They did. `patchproto` used `proto.Equal` for messages and Go's `==` for
+scalars, `patchstruct` used `reflect.DeepEqual`, `patchjson` compared decimal
+text. Two of those were wrong in ways that mattered:
+
+- `proto.Equal` compares the **unknown-field set**, so a `test` with an `m` arm
+  could never hold against a message carrying an unknown field — while the
+  format promises to preserve exactly those, and gives a `Value` no way to
+  mention one. The assertion was unsatisfiable and there was no value that could
+  have passed.
+- A float compared with `==` at the top level and through `proto.Equal` inside a
+  message, so **NaN was unequal in one position and equal in the other**.
+
+So the rule is written out clause by clause. Two choices in it are worth
+defending.
+
+**NaN equals NaN.** A test asserts what a document holds, not an arithmetic
+predicate. Under IEEE inequality a patch could `assign` a NaN and then be unable
+to assert the value it had just written.
+
+**A message compares exactly, not as a subset.** A field absent from `fields`
+asserts the target does not have it set. Subset matching is available by testing
+the fields individually, and making it the default would have meant no way to
+assert "and nothing else".
+
+### Extensions are refused rather than reported absent
+
+**`MessageDescriptor.Fields` never contains extensions, so an extension number
+looked exactly like a field the message does not declare.**
+
+That is not a missing feature; it is a wrong answer. As vacancy, `on_missing`
+silently skipped an operation meant to change the extension, and
+`test.exists = false` **held** — the format asserting that a value sitting in
+the message is not there. Every guarantee it offers rests on `test` telling the
+truth.
+
+Making it an error is the smallest fix that stops it lying, and it moves only
+toward refusal. Addressing extensions properly would need its own arm, and can
+wait; answering wrongly could not.
+
+### Depth is bounded, with the number left to the implementation
+
+**A patch recurses in two places, and a few tens of kilobytes described
+hundreds of thousands of levels.**
+
+At 2000 levels of `nest`, a 47 KB document made validation allocate 862 MB, and
+the cost quadrupled for every doubling of depth. The `Value` literal recurses
+independently, so bounding `nest` alone would have left the other half open.
+
+The schema mandates the **mechanism** and not the number: the right bound
+depends on the reader's stack and on what its producers legitimately send. That
+means one reader may refuse what another accepts, which is stated outright
+rather than left to be discovered — it is the same shape as
+`min_reader_revision`, and it only ever moves toward refusal.
+
+The check runs *before* the unknown-field scan, which is otherwise the first
+thing to happen. Counting recognized structure cannot be misled by a field the
+reader does not understand, and every other pass walks the whole tree — so each
+of them is unsafe until this one has passed.
 
 ### Unknown fields are refused, and preserved
 

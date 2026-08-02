@@ -15,6 +15,8 @@ import (
 //	Value  m_1 = 111;
 //	repeated string     r_s_1 = 1009;
 //	map<string, string> m_s_s = 10909;
+//	map<string, Value>  m_s_m = 10911;
+//	oneof source { string src_s = 121; ...; int32 src_i32 = 123; }
 
 const messageType = "sample.Value"
 
@@ -459,4 +461,92 @@ func ExampleJSONName() {
 	}
 	fmt.Println(out.GetS_1())
 	// Output: v
+}
+
+// Oneof selects whichever member of a oneof is currently set, so a patch does
+// not have to know which one that is — and does not stop covering a member
+// added to the oneof later, the way enumerating the members would.
+func ExampleOneof() {
+	clear := patch.MustNew(messageType,
+		patch.Target(patch.Oneof("source")).Remove(),
+	)
+
+	in := &sample.Value{}
+	in.SetSrcI32(7)
+
+	out, err := patchproto.Apply(in, clear)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("after remove, anything set:", out.HasSrcI32() || out.HasSrcS())
+
+	// Nothing set selects nothing, so the same patch is a no-op rather than a
+	// failure — exactly as an empty Span is.
+	again, err := patchproto.Apply(out, clear)
+	fmt.Println("on an already-clear oneof:", err)
+	_ = again
+
+	// Under Test the oneof itself is read, which is what makes absence
+	// assertable.
+	_, err = patchproto.Apply(out, patch.MustNew(messageType,
+		patch.Target(patch.Oneof("source")).Exists(false),
+	))
+	fmt.Println("exists=false holds:", err == nil)
+
+	// Output:
+	// after remove, anything set: false
+	// on an already-clear oneof: <nil>
+	// exists=false holds: true
+}
+
+// EveryEntry selects every entry of a map, which is what lets a stored patch
+// change a map whose keys it does not know.
+func ExampleEveryEntry() {
+	p := patch.MustNew(messageType,
+		patch.Target(patch.EveryEntry()).In(patch.Name("m_s_m")).Nest(
+			patch.Target(patch.Name("s_2")).Assign(patch.Str("added")),
+		),
+	)
+
+	in := &sample.Value{}
+	one := &sample.Value{}
+	one.SetS_1("one")
+	two := &sample.Value{}
+	two.SetS_1("two")
+	in.SetMSM(map[string]*sample.Value{"a": one, "b": two})
+
+	out, err := patchproto.Apply(in, p)
+	if err != nil {
+		panic(err)
+	}
+	for _, k := range []string{"a", "b"} {
+		v := out.GetMSM()[k]
+		fmt.Printf("%s: %s %s\n", k, v.GetS_1(), v.GetS_2())
+	}
+
+	// Output:
+	// a: one added
+	// b: two added
+}
+
+// Limits bound how deep into a document an engine will recurse. Both places a
+// patch nests are bounded, and both are overridable.
+func ExampleLimits() {
+	deep := patch.Target(patch.Name("s_1")).Assign(patch.Str("leaf"))
+	for range patch.DefaultLimits.NestDepth + 1 {
+		deep = patch.Target(patch.Name("m_1")).Nest(deep)
+	}
+	p := patch.MustNew(messageType, deep)
+
+	_, err := patchproto.Apply(&sample.Value{}, p)
+	fmt.Println(patch.CodeOf(err))
+
+	_, err = patchproto.Apply(&sample.Value{}, p, patchproto.WithLimits(patch.Limits{
+		NestDepth: 32,
+	}))
+	fmt.Println("with a raised bound:", patch.CodeOf(err) != patch.CodeTooDeep)
+
+	// Output:
+	// document is nested too deeply
+	// with a raised bound: true
 }

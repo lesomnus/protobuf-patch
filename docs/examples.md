@@ -11,7 +11,9 @@ int32  i32_1 = 105;  int64  i64_1 = 103;
 Value  m_1 = 111;
 repeated string r_s_1 = 1009;
 map<string, string> m_s_s = 10909;
+map<string, Value>  m_s_m = 10911;
 Closed closed_1 = 119;   // a CLOSED enum declaring 0, 1, 2
+oneof source { string src_s = 121; string src_s_too = 122; int32 src_i32 = 123; Value src_m = 124; }
 ```
 
 > These show the documents. For assembling them in Go, see
@@ -20,7 +22,10 @@ Closed closed_1 = 119;   // a CLOSED enum declaring 0, 1, 2
 - [ProtoJSON is for reading](#protojson-is-for-reading)
 - [Changing one field](#changing-one-field)
 - [The basic operations](#the-basic-operations)
+- [Addressing a oneof](#addressing-a-oneof)
+- [Every entry of a map](#every-entry-of-a-map)
 - [There is no type casting](#there-is-no-type-casting)
+- [What equals means](#what-equals-means)
 - [Errors](#errors)
 - [message_type is optional](#message_type-is-optional)
 
@@ -207,6 +212,86 @@ Where `path` puts a prefix on one entry, `nest` lets several entries share one.
 
 ---
 
+## Addressing a oneof
+
+`oneof_member` resolves to whichever member is currently set, so the document
+does not have to know which one that is.
+
+```json
+"targets": {
+  "selectors": [ { "oneofMember": { "name": "source" } } ]
+},
+"remove": {}
+```
+
+```
+{"src_i32":7}  →  {}
+```
+
+The same patch against a message with `src_s` set clears that instead. And
+against one with nothing set it is a **no-op**, not a failure — nothing set
+selects nothing, which is the same defined empty answer an empty range gives.
+
+Under `test` the oneof itself is read, which is what makes absence assertable:
+
+```json
+"test": { "exists": false }
+```
+
+```
+{"s_1":"x"}  →  {"s_1":"x"}     holds; no member is set
+```
+
+Resolving through a oneof does not loosen anything. The arm still has to match
+the member that is actually set:
+
+```
+delta.entries[0].assign.value: illegal arm for target:
+  sample.Value.src_i32 takes i32, got s
+```
+
+> Prefer this to listing the members. An enumeration silently stops covering a
+> member **added to the oneof later**; this does not.
+
+## Every entry of a map
+
+A map's keys are data, so a patch that has to name them can only be written by
+something that already knows them. `every_entry` is what lets a stored document
+change all of them — and under `nest`, edit *inside* all of them:
+
+```json
+"path": { "segments": [ { "field": { "name": "m_s_m" } } ] },
+"targets": { "selectors": [ { "everyEntry": {} } ] },
+"nest": {
+  "delta": {
+    "entries": [
+      {
+        "targets": {"selectors":[{"key":{"field":{"name":"s_2"}}}]},
+        "assign": {"value":{"s":"added"}}
+      }
+    ]
+  }
+}
+```
+
+```
+{"a":{"s_1":"one"},  "b":{"s_1":"two"}}
+→ {"a":{"s_1":"one","s_2":"added"}, "b":{"s_1":"two","s_2":"added"}}
+```
+
+It is map-only. A range with both bounds unset already selects every element of
+a list, and container scope already addresses a message:
+
+```
+delta.entries[0].targets.selectors[0].every_entry: illegal arm for target:
+  every_entry addresses a map, and sample.Value is not one
+```
+
+An empty map selects nothing, so the entry is a no-op — and a `test` over one
+asserts nothing, which is an error.
+
+---
+
 ## There is no type casting
 
 There is none, and that is deliberate. Each protobuf type class takes exactly
@@ -268,6 +353,47 @@ protobuf descriptor at hand.
 
 If a conversion is wanted, do it in the producer and write the matching arm. The
 format does not guess.
+
+---
+
+## What `equals` means
+
+`test` is the only comparison the format performs, so the rule is written down
+rather than left to the implementation. Two clauses surprise people.
+
+**A message compares exactly, not as a subset.**
+
+```json
+"targets": { "selectors": [ { "key": { "field": { "name": "m_1" } } } ] },
+"test": { "value": { "m": { "fields": [
+  { "key": {"name":"s_1"}, "value": {"s":"v"} }
+] } } }
+```
+
+```
+input   {"m_1":{"s_1":"v","s_2":"also here"}}
+error   delta.entries[0].test: test failed: at sample.Value.m_1
+```
+
+A field absent from `fields` asserts the target does not have it set. For a
+subset assertion, test the fields individually or `nest` a delta of tests.
+
+**Unknown fields on the target take no part**, at any depth. The same patch
+against a message carrying one holds:
+
+```
+input   {"m_1":{"s_1":"v", 2047:42}}     ← field 2047 is unknown
+after   m_1:{s_1:"v"  2047:42}           ← held, and the unknown field survived
+```
+
+That has to be so: the format preserves unknown fields precisely because a
+patch never discards data it did not name, and a `Value` has no way to mention
+one. Counting them would make every `test` against such a message fail with no
+value that could ever pass.
+
+**NaN equals NaN**, and `-0.0` equals `+0.0`. A test asserts what a document
+holds, not an arithmetic predicate — under IEEE inequality a patch could assign
+a NaN and then be unable to assert the value it had just written.
 
 ---
 
@@ -335,6 +461,21 @@ a field was renumbered.
 | `insert` onto something already set | `target already has a value: sample.Value.s_1 is already set` |
 | a value a closed enum does not declare | `undeclared enum value: sample.Closed does not declare 9` |
 | an arm from a newer revision | `unknown field: ... refusing rather than applying the part that is understood` |
+| a number in an extension range | `extension field is not addressable: 100 is in an extension range of ...` |
+| a document nested past the bound | `document is nested too deeply: nested deltas go deeper than 10` |
+
+The extension one deserves a note. It is an **error**, not a missing target,
+because an extension is data the message really holds — reporting it absent
+would let `on_missing` silently skip an operation meant to change it, and let
+`"exists": false` succeed about a value that is present.
+
+The depth one is the format's resource bound. Both places a document recurses
+are bounded and both fail closed:
+
+```
+delta.entries[0].nest.delta...nest.delta: document is nested too deeply:
+  nested deltas go deeper than 10, which is as far as this reader follows
+```
 
 The last one is the shape of the whole contract: a document that is not
 understood is **refused**, not applied in part.
