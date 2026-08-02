@@ -161,6 +161,20 @@ The workspace has two modules. `proto/` is the published one,
 and is deliberately **unnamed** so that `buf push` cannot publish fixture types
 alongside the specification.
 
+### Publishing
+
+```bash
+buf ls-files proto      # confirm only the three schema files go up
+buf push --exclude-unnamed
+```
+
+`--exclude-unnamed` is required, not optional: `buf push` refuses a workspace
+that has a module without a name, and `internal/proto` has none on purpose. The
+flag says "push only the named ones", which is the whole arrangement. Its own
+caveat — that a named module must have no unnamed dependencies — does not apply
+here, because the dependency runs the other way: `proto/patch` imports nothing,
+and the corpus schema imports it.
+
 ### From the registry
 
 ```yaml
