@@ -3,6 +3,19 @@
 A patch document format for Protocol Buffer messages, and a Go implementation
 of it.
 
+> [!IMPORTANT]
+> **The schema is not frozen.** It is being used for real, and changed in
+> response to that use. Expect breaking wire changes — field numbers moving,
+> constructs being renamed or redefined — **in place**, not as a `patchv2`.
+> `Patch.min_reader_revision` is not yet doing its job either: while the schema
+> is unstable a break may not bump it, because the number describes a meaning
+> change within a compatible schema and right now the schema itself moves.
+>
+> If you depend on it, **pin a specific commit** rather than tracking a label,
+> and re-read [format.md](docs/format.md) when you move. This notice comes off
+> when the schema is declared stable, and from then on the rules under
+> [Versioning](#versioning) apply.
+
 A patch describes a change to a message — set this field, remove that map key,
 replace this element — as **itself a protobuf message**, so it serializes,
 stores, and travels like any other. It is modeled on JSON Patch (RFC 6902) and
@@ -116,6 +129,9 @@ These five decide every case where the format had a choice.
 The reasoning behind each is in [decisions.md](docs/decisions.md).
 
 ## Versioning
+
+**These are the rules from the moment the schema is declared stable.** Until
+then, see the notice at the top: breaking changes land in place.
 
 The package is `patch`, with no version suffix. A future breaking revision will
 be a new package — `patchv2`, in `proto/patchv2/` — rather than a suffix on this

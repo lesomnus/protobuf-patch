@@ -1,5 +1,11 @@
 # The patch format
 
+> [!IMPORTANT]
+> **Not yet stable.** This schema is in use and changing in response to that
+> use. Breaking wire changes land in place rather than as a `patchv2`, and may
+> not bump `min_reader_revision`. Pin a commit. See
+> [Evolution](#evolution) for the rules that apply once it settles.
+
 A reference for `patch.Patch`. The normative source is the comments in
 [`proto/patch/`](../proto/patch/); this page is the readable version of them.
 For assembling a patch in Go, see [builder.md](builder.md).
@@ -591,6 +597,9 @@ a revision locks out older readers for every document, not only those using the
 changed construct.
 
 ### Versioning
+
+**From the moment the schema is declared stable.** Until then it is still
+settling, and a break lands in place — see the notice at the top of this page.
 
 The package is `patch`, with no version suffix. A future breaking revision will
 be a new package — `patchv2` — rather than a suffix on this one. Within `patch`,
