@@ -12,8 +12,7 @@ elements, applying one operation to several targets, and nesting a sub-patch
 under a shared path prefix.
 
 The library validates and applies patches; it does not generate them from a
-pair of messages. There is no `Diff`. A `Patch` is built by hand, or converted
-from an RFC 6902 JSON Patch document.
+pair of messages. There is no `Diff`. A `Patch` is built by hand.
 
 ```go
 p, err := patch.New("example.v1.User",
@@ -54,7 +53,6 @@ the same conformance corpus.
 | [`patch`](patch/) | The error taxonomy, the builders, validation, and every rule decidable from a document and a descriptor |
 | [`patchproto`](patchproto/) | Applies a patch to a `proto.Message` |
 | [`patchjson`](patchjson/) | Applies a patch to schema-less JSON, refusing what it cannot check |
-| [`jsonpatch`](jsonpatch/) | Parses RFC 6902 documents and converts them to patches |
 | [`conformance`](conformance/) | The corpus every implementation must satisfy, and its runner |
 | [`patchpb`](patchpb/) | Generated bindings |
 

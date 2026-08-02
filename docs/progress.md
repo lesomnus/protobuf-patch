@@ -12,7 +12,7 @@
 | P3 값 모델 | ✅ | `patch/value.go` |
 | P4 주소 해석 | ✅ | `patch/resolve.go`, `patchproto/cont.go` |
 | P5 적용 | ✅ | `patchproto/`, `conformance/` |
-| P6 RFC 6902 변환 | ✅ | `jsonpatch/convert.go` |
+| P6 JSON 백엔드 | ✅ | `patchjson/`, `patch/schemaless.go` |
 
 ---
 
@@ -286,12 +286,14 @@ conformance.Run(t, func(in *sample.Value, p *patchpb.Patch) (*sample.Value, erro
 
 ---
 
-## P6 — RFC 6902 변환 ✅
+## P6 — RFC 6902 변환 (제거됨)
 
-`jsonpatch/convert.go`
+**구현했다가 제거했다.** 요구된 적이 없는 기능이었다 — 구 저장소에서 물려받아 계획 P6에 들어왔고, 범위를 정할 때 `Diff`와 struct 백엔드는 명시적으로 잘렸지만 이건 언급이 없어 **선택되어서가 아니라 잘리지 않아서** 살아남았다. 확인해보니 필요한 것은 RFC 6902 문서를 받는 일이 아니라 JSON 문서에 `Patch`를 적용하는 일이었다.
+
+아래는 제거 전에 배운 것으로, 남겨둘 값어치가 있다.
 
 ```go
-func Convert(doc Doc, md protoreflect.MessageDescriptor) (*patchpb.Patch, error)
+func Convert(doc Doc, md protoreflect.MessageDescriptor) (*patchpb.Patch, error)  // 제거됨
 ```
 
 ### 계획과 달라진 점: `messageType string` → `protoreflect.MessageDescriptor`
@@ -339,7 +341,7 @@ func Convert(doc Doc, md protoreflect.MessageDescriptor) (*patchpb.Patch, error)
 | P3 값 모델 | `patch/value.go` | 16 필드 × 10 생성자 전수 |
 | P4 주소 해석 | `patch/resolve.go`, `patchproto/cont.go` | 스키마 Range 예제가 곧 테스트 |
 | P5 적용 | `patchproto/`, `conformance/` | 7×4 + 적합성 39케이스 |
-| P6 RFC 6902 | `jsonpatch/convert.go` | 전역성 |
+| P6 JSON 백엔드 | `patchjson/` | 코퍼스 28/39 일치, 나머지는 원인 선언 |
 
 `go test ./...` 388개 하위 테스트 통과 · `buf lint` 클린 · `gofmt` 클린.
 

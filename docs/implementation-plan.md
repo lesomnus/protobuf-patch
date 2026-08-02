@@ -17,18 +17,18 @@
 | **검증** | `Patch`가 스키마를 만족하는지 판정. 대상 없이 가능한 것과 대상이 필요한 것으로 나뉜다 |
 | **적용** | `proto.Message`에 `Patch`를 적용. 원자적 |
 | **빌더** | `Patch`를 손으로 조립하기 위한 계층 |
-| **RFC 6902 변환** | JSON Patch 문서 → `Patch` |
+| **JSON 적용** | 스키마 없는 JSON 문서에 `Patch`를 적용 |
 
 ### 1.2 만들지 않는 것
 
 | | 이유 |
 |---|---|
 | **`Diff`** | 범위에서 제외. 두 메시지로부터 `Patch`를 생성하지 않는다 |
-| **JSON 백엔드** | `protojson.Unmarshal` → `Apply` → `protojson.Marshal`로 충분하다. 새 스키마는 `Field.number` 검증·`MapKey`의 선언된 키 타입 일치·`Value.e`의 CLOSED enum 검사에 descriptor가 필요하므로, descriptor를 요구하는 순간 별도 백엔드가 버는 게 없다 |
-| **Go struct 백엔드** | 위와 같음 |
+| **RFC 6902 변환** | JSON Patch 문서를 받아 `Patch`로 바꾸는 일은 요구된 적이 없다. 구 저장소에서 물려받아 계획에 들어왔을 뿐이라 제거했다 |
+| **Go struct 백엔드** | 아직. 생성된 구조체는 opaque API에서 필드가 전부 unexported라 `reflect`로 못 읽고, 어차피 `patchproto`가 처리한다. 손으로 쓴 구조체가 대상인데 그 수요가 확인되지 않았다 |
 | **`patchwire`** | 나중에. §5 참조 |
 
-**`Patch`를 만드는 경로는 빌더와 RFC 6902 변환 둘뿐이다.** `Diff`가 없으므로 빌더의 사용성이 곧 라이브러리의 사용성이다.
+**`Patch`를 만드는 경로는 빌더뿐이다.** `Diff`가 없으므로 빌더의 사용성이 곧 라이브러리의 사용성이다.
 
 ---
 
@@ -83,26 +83,24 @@ type Resolution struct {
 구 구현의 가장 큰 실패는 **세 백엔드가 같은 구조를 각자 해석해 서로 갈라진 것**이었다(원 검토 §3.5: "하나의 구조에 여러 해석기 — 전부 이미 갈라졌다"). 백엔드가 지금은 하나지만 `patchwire`가 예정되어 있으므로 구조로 막는다.
 
 ```
-patchpb/            생성 코드 ✓ 완료
-internal/spec/      스키마 규칙의 단일 구현 — 모든 소비자가 공유
-  errors.go           21개 조항의 에러 분류
+patchpb/            생성 코드
+patch/              스키마 규칙의 단일 구현 + 빌더 — 모든 소비자가 공유
+  errors.go           조항별 에러 분류
+  build*.go           Patch를 손으로 조립
   validate.go         구조 검증 (대상 불필요)
-  field.go            Field 제약 해석
-  mapkey.go           MapKey arm 판정 + 범위 검사
-  selector.go         Range 정규화, Append 적법성, 중복 검출
-patch/              빌더 — Patch를 손으로 조립
+  value.go            Value arm 적법성, 스칼라 변환
+  resolve.go          Field 제약 해석, Range·Index 정규화
+  schemaless.go       descriptor 없는 소비자를 위한 해석
 patchproto/         proto.Message 백엔드
-  resolve.go          Path/Key 탐색 (spec 사용)
-  value.go            Value ↔ protoreflect.Value
-  apply.go            7 kind × 4 scope
-jsonpatch/          RFC 6902 문서 파싱 ✓ 유지
-  convert.go          Doc → patchpb.Patch (신규)
-conformance/        적합성 코퍼스 (신규)
-internal/sample/    테스트 픽스처 ✓ 유지
-internal/x/         테스트 헬퍼 ✓ 유지
+patchjson/          스키마 없는 JSON 백엔드
+conformance/        적합성 코퍼스
+internal/sample/    테스트 픽스처
+internal/x/         테스트 헬퍼
 ```
 
-**규칙: `internal/spec`에 있는 판단을 소비자가 재구현하지 않는다.** `Range` 정규화가 두 곳에 있으면 두 곳이 갈라진다. 구 구현에서 정확히 그 일이 일어났다(`expandListTargets` vs `RangeSegment.Match`가 presence·부호·합집합 셋 다 불일치).
+> 계획은 공유 규칙을 `internal/spec`에 두려 했으나 **에러 분류가 곧 API인데 `internal/`은 import할 수 없다.** 분할 기준을 "메시지 인스턴스를 만지는가"로 바꿔 `patch/`에 두었다 — 자세한 것은 [progress.md](progress.md).
+
+**규칙: `patch/`에 있는 판단을 소비자가 재구현하지 않는다.** `Range` 정규화가 두 곳에 있으면 두 곳이 갈라진다. 구 구현에서 정확히 그 일이 일어났다(`expandListTargets` vs `RangeSegment.Match`가 presence·부호·합집합 셋 다 불일치).
 
 ---
 
@@ -234,28 +232,25 @@ func Apply[T proto.Message](m T, p *patchpb.Patch, opts ...Option) (T, error)
 
 **완료 기준**: 28칸 전부에 최소 하나의 테스트. `move`의 퇴화 사례(자기 자신으로 이동 → no-op, 소스 부재 → 오류).
 
-### P6 — RFC 6902 변환
+### P6 — 스키마 없는 JSON 백엔드
 
 ```go
-func FromJsonPatch(doc jsonpatch.Doc, messageType string) (*patchpb.Patch, error)
+func Apply(doc []byte, p *patchpb.Patch, opts ...Option) ([]byte, error)
 ```
 
-`append`가 `move`/`copy`에도 허용되므로 **이제 전역이 될 수 있다.** 구 구현이 거부하던 `{"op":"copy","from":"/a/0","path":"/b/-"}`가 표현 가능하다.
+**§1.2가 원래 "폐기"로 적었던 것을 되돌린 자리다.** 당시 논거는 *"descriptor를 요구하면 round-trip이 이미 커버한다"*였는데 둘 다 틀렸다 — round-trip은 선언되지 않은 멤버를 거부하거나 조용히 없애고(스키마 자신의 규칙 위반), 애초에 필요한 건 **스키마가 아예 없는 JSON**을 다루는 기계였다.
 
-매핑 변경에 주의:
+정의 가능하게 만드는 것은 한 줄이다: **JSON 오브젝트는 맵처럼 동작한다.** 스키마가 없으면 어떤 키든 유효한 자리이므로 `assign`이 멤버를 만들고 `insert`는 비어 있기를 요구한다.
 
-| RFC 6902 | 구 구현 | 신 구현 |
-|---|---|---|
-| `add` (객체 멤버, 기존 존재) | `assign` | `assign` — **`insert`가 아니다.** 새 `insert`는 기존 값이 있으면 오류 |
-| `add` (배열 인덱스) | `insert` | `insert` |
-| `add` (`-` 토큰) | `insert` at `-1` | `insert` at `Selector.append` |
-| `test` | **조용히 버림** | `test`로 변환 |
-| cross-container `move`/`copy` | 오류 | `Location`으로 표현 |
-| JSON `null` | `ValNull()` | **`remove`** (null arm 없음) |
+거부해야 할 것 — 근사하면 안 된다:
 
-`message_type`이 필수이므로 시그니처에 인자가 하나 늘어난다.
+| 구조 | 왜 |
+|---|---|
+| `Field.number` | 검사할 수 없는 제약을 버리는 건 관용이 아니다. `on_missing=SKIP`이어도 오류 |
+| `MapKey.i`/`u`/`b` | JSON 키는 문자열. 구 구현은 문자열화해서 `Field("7")`과 `FieldNum(7)`을 같은 항목으로 만들었다 |
+| `NaN`/`Infinity` | JSON에 표현이 없음 |
 
-**완료 기준**: RFC 6902 예제 문서 전체가 변환되고 변환 실패 케이스가 없다.
+**완료 기준**: 공유 코퍼스를 이 엔진으로도 돌려, 일치하지 않는 케이스가 **전부 원인이 선언된 상태**로 통과한다. 선언 없는 불일치는 실패다.
 
 ---
 
@@ -265,7 +260,7 @@ serialize된 wire format 바이트 배열에 `Patch`를 직접 적용한다. **�
 
 **다만 독립이어야 하는 것은 *적용 엔진*이지 *스키마 해석*이 아니다.** `Range` 정규화, `Field` 제약 해석, 구조 검증, 중복 검출, `MapKey` 범위 판정은 대상이 메시지든 바이트든 답이 같아야 한다. 이것이 갈라지면 구 구현에서 세 백엔드가 같은 Delta를 다르게 읽던 문제가 그대로 재발한다.
 
-→ `patchwire`는 `internal/spec`을 공유하고 적용만 독자적으로 구현한다. `conformance/` 코퍼스를 `patchproto`와 함께 돌려 두 구현이 같은 답을 내는지 고정한다.
+→ `patchwire`는 `patch/`를 공유하고 적용만 독자적으로 구현한다. `conformance/` 코퍼스를 `patchproto`·`patchjson`과 함께 돌려, 일치하거나 **원인이 선언된 불일치**만 남는지 고정한다.
 
 > 구 `ref/`, `target/`은 이 작업에 쓸 수 없어 삭제했다. `path`/`targets`가 불투명한 `bytes` 필드였던 더 이전 설계의 인코더였고(`ref.Ref` → `FieldSegment` → 지금의 `Key`), `ref.DecodeInt`는 protobuf varint가 아니라 리틀엔디언 고정 폭을 읽는 자체 인코딩이다. patchwire는 `protowire`를 직접 쓰게 된다. 참조본 `2a96ef1`에 남아 있다.
 
@@ -315,7 +310,6 @@ API는 죽었지만 **무엇을 검증해야 하는가**는 살아 있다. `/wor
 | `patchproto/list_test.go` | 음수 인덱스, 다중 타겟 |
 | `patchproto/map_test.go` | 맵 키 타입별 케이스 |
 | `dpb/path_test.go` | 경로 탐색 케이스 |
-| `jsonpatch/*_test.go` | 그대로 유효 (스키마 무관) |
 
 ---
 
@@ -328,9 +322,9 @@ P2 구조 검증      ← unknown field 순회가 forward-compat의 실질적 �
 P3 값 모델        ← P2와 병렬 가능
 P4 주소 해석      ← vacancy를 타입으로. P3과 병렬 가능
 P5 적용           ← P0–P4 전부 필요
-P6 RFC 6902 변환  ← P5 필요
+P6 JSON 백엔드    ← P5 필요
 ─────────────────
-patchwire         ← 별도. internal/spec 공유, 적용만 독자 구현
+patchwire         ← 별도. patch/ 공유, 적용만 독자 구현
 ```
 
 **적합성 코퍼스는 P5와 함께 시작한다.**
