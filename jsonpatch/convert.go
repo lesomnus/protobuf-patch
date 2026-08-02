@@ -1,9 +1,13 @@
 package jsonpatch
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math"
+	"sort"
 	"strconv"
+	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -318,76 +322,252 @@ func locationOf(md protoreflect.MessageDescriptor, segs []string) (*patchpb.Loca
 }
 
 // valueAt converts a JSON value for the position the last segment names.
-//
-// It goes through protojson rather than reading the JSON directly, so that
-// base64 bytes, enum names, 64-bit integers written as strings, and the
-// well-known types all mean here what they mean everywhere else in protobuf.
 func valueAt(c cursor, s seg, raw json.RawMessage) (*patchpb.Value, error) {
-	var (
-		holder protoreflect.MessageDescriptor
-		fd     protoreflect.FieldDescriptor
-		site   patch.Site
-	)
 	switch {
 	case s.field != nil:
-		holder, fd, site = c.msg, s.field, patch.SiteField
+		return parseValue(raw, s.field, patch.SiteField)
 	case s.list:
-		holder, fd, site = c.fd.ContainingMessage(), c.fd, patch.SiteElement
+		return parseValue(raw, c.fd, patch.SiteElement)
 	default:
-		holder, fd, site = c.fd.ContainingMessage(), c.fd, patch.SiteMapValue
+		return parseValue(raw, c.fd, patch.SiteMapValue)
 	}
-
-	// Wrap the value so protojson parses it in the shape the field expects.
-	var wrapped []byte
-	switch site {
-	case patch.SiteElement:
-		wrapped = []byte(fmt.Sprintf(`{%q:[%s]}`, fd.JSONName(), raw))
-	case patch.SiteMapValue:
-		// ProtoJSON always writes a map key as a JSON string, but it must
-		// still parse as the declared key type.
-		wrapped = []byte(fmt.Sprintf(`{%q:{%q:%s}}`, fd.JSONName(), placeholderKey(fd), raw))
-	default:
-		wrapped = []byte(fmt.Sprintf(`{%q:%s}`, fd.JSONName(), raw))
-	}
-
-	holderMsg := dynamicpb.NewMessage(holder)
-	if err := (protojson.UnmarshalOptions{}).Unmarshal(wrapped, holderMsg); err != nil {
-		return nil, fmt.Errorf("value for %s: %w", fd.FullName(), err)
-	}
-
-	got := holderMsg.Get(fd)
-	switch site {
-	case patch.SiteElement:
-		if got.List().Len() != 1 {
-			return nil, fmt.Errorf("value for %s did not parse as one element", fd.FullName())
-		}
-		got = got.List().Get(0)
-	case patch.SiteMapValue:
-		var found protoreflect.Value
-		got.Map().Range(func(_ protoreflect.MapKey, v protoreflect.Value) bool {
-			found = v
-			return false
-		})
-		if !found.IsValid() {
-			return nil, fmt.Errorf("value for %s did not parse", fd.FullName())
-		}
-		got = found
-	}
-
-	return patch.ValueOf(got, fd, site, "")
 }
 
-// placeholderKey is a key of the map's declared type, used only to give
-// protojson a well-formed entry to parse the VALUE out of.
-func placeholderKey(fd protoreflect.FieldDescriptor) string {
-	switch fd.MapKey().Kind() {
-	case protoreflect.StringKind:
-		return "k"
-	case protoreflect.BoolKind:
-		return "false"
-	default:
-		return "0"
+// parseValue reads a JSON value as ProtoJSON defines it for fd at site.
+//
+// It parses against the FIELD's own type, never against a holder message. An
+// earlier version wrapped the value as {"fieldName": raw} and handed that to
+// protojson, which is wrong whenever the holder is a well-known type: protojson
+// applies the WKT's custom JSON form to the wrapper, so patching inside a
+// google.protobuf.Struct silently produced a zero instead of the value written.
+// Message values still go through protojson, but against their own descriptor,
+// where the WKT form is the correct one to apply.
+func parseValue(raw json.RawMessage, fd protoreflect.FieldDescriptor, site patch.Site) (*patchpb.Value, error) {
+	if site == patch.SiteField && fd.IsList() {
+		var elems []json.RawMessage
+		if err := json.Unmarshal(raw, &elems); err != nil {
+			return nil, fmt.Errorf("%s takes an array: %w", fd.FullName(), err)
+		}
+		vs := make([]*patchpb.Value, 0, len(elems))
+		for i, e := range elems {
+			v, err := parseValue(e, fd, patch.SiteElement)
+			if err != nil {
+				return nil, fmt.Errorf("[%d]: %w", i, err)
+			}
+			vs = append(vs, v)
+		}
+		return patchpb.Value_builder{
+			L: patchpb.ListValue_builder{Values: vs}.Build(),
+		}.Build(), nil
 	}
+
+	if site == patch.SiteField && fd.IsMap() {
+		var members map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &members); err != nil {
+			return nil, fmt.Errorf("%s takes an object: %w", fd.FullName(), err)
+		}
+		keys := make([]string, 0, len(members))
+		for k := range members {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		entries := make([]*patchpb.MapEntry, 0, len(members))
+		for _, k := range keys {
+			mk, err := mapKeyFromString(k, fd)
+			if err != nil {
+				return nil, err
+			}
+			v, err := parseValue(members[k], fd, patch.SiteMapValue)
+			if err != nil {
+				return nil, fmt.Errorf("[%q]: %w", k, err)
+			}
+			entries = append(entries, patchpb.MapEntry_builder{Key: mk, Value: v}.Build())
+		}
+		return patchpb.Value_builder{
+			Map: patchpb.MapValue_builder{Entries: entries}.Build(),
+		}.Build(), nil
+	}
+
+	d := fd
+	if site == patch.SiteMapValue {
+		d = fd.MapValue()
+	}
+	if d.Kind() == protoreflect.MessageKind || d.Kind() == protoreflect.GroupKind {
+		m := dynamicpb.NewMessage(d.Message())
+		if err := (protojson.UnmarshalOptions{}).Unmarshal(raw, m); err != nil {
+			return nil, fmt.Errorf("%s: %w", d.Message().FullName(), err)
+		}
+		return patch.ValueOf(protoreflect.ValueOfMessage(m), fd, site, "")
+	}
+	return parseScalar(raw, d)
+}
+
+// parseScalar implements ProtoJSON's scalar forms: 64-bit integers may be
+// written as strings, floats accept "NaN"/"Infinity"/"-Infinity", bytes are
+// base64, and an enum is a value name or a number.
+func parseScalar(raw json.RawMessage, d protoreflect.FieldDescriptor) (*patchpb.Value, error) {
+	b := patchpb.Value_builder{}
+	kind := d.Kind()
+
+	switch kind {
+	case protoreflect.BoolKind:
+		var v bool
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return nil, fmt.Errorf("%s takes a bool: %w", d.FullName(), err)
+		}
+		b.B = &v
+
+	case protoreflect.StringKind:
+		var v string
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return nil, fmt.Errorf("%s takes a string: %w", d.FullName(), err)
+		}
+		b.S = &v
+
+	case protoreflect.BytesKind:
+		var v string
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return nil, fmt.Errorf("%s takes base64: %w", d.FullName(), err)
+		}
+		x, err := decodeBase64(v)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", d.FullName(), err)
+		}
+		b.X = x
+
+	case protoreflect.EnumKind:
+		n, err := parseEnum(raw, d.Enum())
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", d.FullName(), err)
+		}
+		b.E = &n
+
+	case protoreflect.FloatKind, protoreflect.DoubleKind:
+		f, err := parseFloat(raw)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", d.FullName(), err)
+		}
+		if kind == protoreflect.FloatKind {
+			v := float32(f)
+			b.F32 = &v
+		} else {
+			b.F64 = &f
+		}
+
+	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind,
+		protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
+		n, err := parseInt(raw)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", d.FullName(), err)
+		}
+		if kind == protoreflect.Int32Kind || kind == protoreflect.Sint32Kind || kind == protoreflect.Sfixed32Kind {
+			if n < math.MinInt32 || n > math.MaxInt32 {
+				return nil, fmt.Errorf("%s: %d is outside the range of %v", d.FullName(), n, kind)
+			}
+			v := int32(n)
+			b.I32 = &v
+		} else {
+			b.I64 = &n
+		}
+
+	case protoreflect.Uint32Kind, protoreflect.Fixed32Kind,
+		protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+		n, err := parseUint(raw)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", d.FullName(), err)
+		}
+		if kind == protoreflect.Uint32Kind || kind == protoreflect.Fixed32Kind {
+			if n > math.MaxUint32 {
+				return nil, fmt.Errorf("%s: %d is outside the range of %v", d.FullName(), n, kind)
+			}
+			v := uint32(n)
+			b.U32 = &v
+		} else {
+			b.U64 = &n
+		}
+
+	default:
+		return nil, fmt.Errorf("%s is a %v, which has no JSON form here", d.FullName(), kind)
+	}
+	return b.Build(), nil
+}
+
+func unquoted(raw json.RawMessage) (string, bool) {
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return "", false
+	}
+	return s, true
+}
+
+func parseInt(raw json.RawMessage) (int64, error) {
+	if s, ok := unquoted(raw); ok {
+		return strconv.ParseInt(s, 10, 64)
+	}
+	n, err := strconv.ParseInt(strings.TrimSpace(string(raw)), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("takes an integer, got %s", raw)
+	}
+	return n, nil
+}
+
+func parseUint(raw json.RawMessage) (uint64, error) {
+	if s, ok := unquoted(raw); ok {
+		return strconv.ParseUint(s, 10, 64)
+	}
+	n, err := strconv.ParseUint(strings.TrimSpace(string(raw)), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("takes an unsigned integer, got %s", raw)
+	}
+	return n, nil
+}
+
+func parseFloat(raw json.RawMessage) (float64, error) {
+	if s, ok := unquoted(raw); ok {
+		switch s {
+		case "NaN":
+			return math.NaN(), nil
+		case "Infinity":
+			return math.Inf(1), nil
+		case "-Infinity":
+			return math.Inf(-1), nil
+		}
+		return strconv.ParseFloat(s, 64)
+	}
+	return strconv.ParseFloat(strings.TrimSpace(string(raw)), 64)
+}
+
+func parseEnum(raw json.RawMessage, ed protoreflect.EnumDescriptor) (int32, error) {
+	if s, ok := unquoted(raw); ok {
+		if ed == nil {
+			return 0, fmt.Errorf("no enum type")
+		}
+		v := ed.Values().ByName(protoreflect.Name(s))
+		if v == nil {
+			return 0, fmt.Errorf("%s declares no value named %q", ed.FullName(), s)
+		}
+		return int32(v.Number()), nil
+	}
+	n, err := strconv.ParseInt(strings.TrimSpace(string(raw)), 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("takes a value name or a number, got %s", raw)
+	}
+	return int32(n), nil
+}
+
+// decodeBase64 accepts both alphabets, with or without padding, as ProtoJSON
+// requires.
+func decodeBase64(s string) ([]byte, error) {
+	for _, enc := range []*base64.Encoding{
+		base64.StdEncoding, base64.RawStdEncoding,
+		base64.URLEncoding, base64.RawURLEncoding,
+	} {
+		if b, err := enc.DecodeString(s); err == nil {
+			return b, nil
+		}
+	}
+	return nil, fmt.Errorf("not base64")
 }
 
 func mapKeyFromString(raw string, fd protoreflect.FieldDescriptor) (*patchpb.MapKey, error) {
