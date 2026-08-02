@@ -1,0 +1,49 @@
+edition = "2023";
+
+package conformance;
+
+import "patch/patch.proto";
+import "sample/value.proto";
+
+option features.field_presence = EXPLICIT;
+
+option go_package = "github.com/lesomnus/protobuf-patch/conformance/conformancepb";
+
+// Suite is a file of conformance cases.
+//
+// The corpus is DATA, not Go code, so that every implementation of the patch
+// format can run the same cases without importing another implementation's
+// tests. Applying a Patch to a live message and applying one to serialized
+// bytes are necessarily separate engines; this is what keeps them from
+// drifting into reading the same document differently, which is exactly what
+// happened to the three backends of the previous design.
+message Suite {
+  repeated Case cases = 1;
+}
+
+// Case is one document applied to one input, with the single outcome every
+// conforming implementation must produce.
+message Case {
+  // Short identifier, unique within the corpus.
+  string name = 1;
+
+  // Why this case exists — the rule it pins, in one line.
+  string doc = 2;
+
+  // The document under test.
+  patch.Patch patch = 3;
+
+  // The message it is applied to.
+  sample.Value input = 4;
+
+  // Exactly one is required.
+  oneof want {
+    // The message the implementation must produce.
+    sample.Value output = 5;
+
+    // The name of the patch.Code the implementation must report, as
+    // patch.Code.String writes it. On failure the input must also be left
+    // unchanged: the format applies entirely or not at all.
+    string error = 6;
+  }
+}

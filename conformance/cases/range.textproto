@@ -1,0 +1,126 @@
+# Range normalization, on a list of five.
+#
+# The previous schema gave four worked examples that no single rule could
+# reproduce, and its implementation branched on the value 0 rather than on
+# presence. These pin the one rule: unset means 0 or len, negative means
+# len+v, both clamp, and begin >= end selects nothing.
+
+cases {
+  name: "range_all"
+  doc: "Neither bound set selects every element."
+  input { r_s_1: "a" r_s_1: "b" r_s_1: "c" r_s_1: "d" r_s_1: "e" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets { selectors { range {} } }
+      remove {}
+    } }
+  }
+  output {}
+}
+
+cases {
+  name: "range_from_negative"
+  doc: "[-2, _) is the last two."
+  input { r_s_1: "a" r_s_1: "b" r_s_1: "c" r_s_1: "d" r_s_1: "e" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets { selectors { range { begin: -2 } } }
+      remove {}
+    } }
+  }
+  output { r_s_1: "a" r_s_1: "b" r_s_1: "c" }
+}
+
+cases {
+  name: "range_to_negative"
+  doc: "[_, -2) is everything but the last two."
+  input { r_s_1: "a" r_s_1: "b" r_s_1: "c" r_s_1: "d" r_s_1: "e" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets { selectors { range { end: -2 } } }
+      remove {}
+    } }
+  }
+  output { r_s_1: "d" r_s_1: "e" }
+}
+
+cases {
+  name: "range_middle"
+  doc: "[1, 4) is the middle three."
+  input { r_s_1: "a" r_s_1: "b" r_s_1: "c" r_s_1: "d" r_s_1: "e" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets { selectors { range { begin: 1 end: 4 } } }
+      remove {}
+    } }
+  }
+  output { r_s_1: "a" r_s_1: "e" }
+}
+
+cases {
+  name: "range_explicit_zero_zero_is_empty"
+  doc: "An explicitly set [0, 0) selects nothing. Branching on the value instead of presence makes this the whole list."
+  input { r_s_1: "a" r_s_1: "b" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets { selectors { range { begin: 0 end: 0 } } }
+      remove {}
+    } }
+  }
+  output { r_s_1: "a" r_s_1: "b" }
+}
+
+cases {
+  name: "range_open_from_zero_is_everything"
+  doc: "[0, _) with only begin set is the whole list, which [0, 0) is not."
+  input { r_s_1: "a" r_s_1: "b" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets { selectors { range { begin: 0 } } }
+      remove {}
+    } }
+  }
+  output {}
+}
+
+cases {
+  name: "range_never_wraps"
+  doc: "[-2, 2) on five elements is empty (3 >= 2). The old comment claimed it was the last two plus the first two."
+  input { r_s_1: "a" r_s_1: "b" r_s_1: "c" r_s_1: "d" r_s_1: "e" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets { selectors { range { begin: -2 end: 2 } } }
+      remove {}
+    } }
+  }
+  output { r_s_1: "a" r_s_1: "b" r_s_1: "c" r_s_1: "d" r_s_1: "e" }
+}
+
+cases {
+  name: "range_clamps_out_of_bounds"
+  doc: "[9, _) on five elements clamps to empty rather than failing."
+  input { r_s_1: "a" r_s_1: "b" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets { selectors { range { begin: 9 } } }
+      remove {}
+    } }
+  }
+  output { r_s_1: "a" r_s_1: "b" }
+}

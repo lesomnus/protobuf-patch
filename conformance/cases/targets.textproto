@@ -1,0 +1,107 @@
+# Multi-target resolution: the rules that make `targets` a set.
+#
+# Every index and key resolves against the container as it stood BEFORE the
+# entry began, so no permutation of the selectors changes the outcome and an
+# earlier write cannot shift a later target. An implementation that resolves
+# as it applies gets different answers here.
+
+cases {
+  name: "remove_two_indices"
+  doc: "Indices resolve pre-entry, so removing 0 and 2 of [a b c] leaves [b]."
+  input { r_s_1: "a" r_s_1: "b" r_s_1: "c" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets {
+        selectors { key { index: 0 } }
+        selectors { key { index: 2 } }
+      }
+      remove {}
+    } }
+  }
+  output { r_s_1: "b" }
+}
+
+cases {
+  name: "remove_two_indices_reversed"
+  doc: "The same entry with the selectors swapped must produce the same list."
+  input { r_s_1: "a" r_s_1: "b" r_s_1: "c" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets {
+        selectors { key { index: 2 } }
+        selectors { key { index: 0 } }
+      }
+      remove {}
+    } }
+  }
+  output { r_s_1: "b" }
+}
+
+cases {
+  name: "insert_two_indices"
+  doc: "Insert before original 0 and 2 of [a b c] gives [Z a b Z c], not [Z Z a b c]."
+  input { r_s_1: "a" r_s_1: "b" r_s_1: "c" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets {
+        selectors { key { index: 0 } }
+        selectors { key { index: 2 } }
+      }
+      insert { value { s: "Z" } }
+    } }
+  }
+  output { r_s_1: "Z" r_s_1: "a" r_s_1: "b" r_s_1: "Z" r_s_1: "c" }
+}
+
+cases {
+  name: "negative_index_is_the_last_element"
+  doc: "-1 means the last element for every kind; appending has its own selector."
+  input { r_s_1: "a" r_s_1: "b" r_s_1: "c" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets { selectors { key { index: -1 } } }
+      assign { value { s: "Z" } }
+    } }
+  }
+  output { r_s_1: "a" r_s_1: "b" r_s_1: "Z" }
+}
+
+cases {
+  name: "append_grows_the_list"
+  doc: "Selector.append is the RFC 6901 \"-\" token and is legal with insert."
+  input { r_s_1: "a" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets { selectors { append {} } }
+      insert { value { s: "Z" } }
+    } }
+  }
+  output { r_s_1: "a" r_s_1: "Z" }
+}
+
+cases {
+  name: "duplicate_target_is_an_error"
+  doc: "targets is a set; naming s_1 twice, once by name and once by number, is a mistake."
+  input { s_1: "x" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets {
+        selectors { key { field { name: "s_1" } } }
+        selectors { key { field { number: 109 } } }
+      }
+      assign { value { s: "y" } }
+    } }
+  }
+  error: "duplicate target"
+}

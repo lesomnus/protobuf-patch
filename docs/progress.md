@@ -11,7 +11,7 @@
 | P2 구조 검증 | ✅ | `patch/validate.go` |
 | P3 값 모델 | ✅ | `patch/value.go` |
 | P4 주소 해석 | ✅ | `patch/resolve.go`, `patchproto/cont.go` |
-| P5 적용 | 🟨 | `patchproto/` (적합성 코퍼스 남음) |
+| P5 적용 | ✅ | `patchproto/`, `conformance/` |
 | P6 RFC 6902 변환 | ⬜ | `jsonpatch/` |
 
 ---
@@ -219,7 +219,7 @@ func NormalizeRange(r *patchpb.Range, length int) (int, int)
 
 ---
 
-## P5 — 적용 🟨
+## P5 — 적용 ✅
 
 `patchproto/apply.go` · `cont.go` · `container.go` · `value.go`
 
@@ -227,7 +227,7 @@ func NormalizeRange(r *patchpb.Range, length int) (int, int)
 func Apply[T proto.Message](m T, p *patchpb.Patch, opts ...Option) (T, error)
 ```
 
-7 kind × 4 scope가 모두 동작한다. 적합성 코퍼스(`conformance/`)는 아직이다.
+7 kind × 4 scope가 모두 동작하고, 적합성 코퍼스가 39개 케이스를 돌린다.
 
 ### 원자성 — in-place API가 없다
 
@@ -256,3 +256,30 @@ func Apply[T proto.Message](m T, p *patchpb.Patch, opts ...Option) (T, error)
 - **컨테이너 `assign`은 staged 메시지에 먼저 채운다.** 선언되지 않은 필드를 가리키는 값이 오면 **비우기 전에** 실패해야 한다. 구 구현은 먼저 지우고 나서 해석 못한 키를 버려서 부분 데이터 손실을 만들었다.
 - **`remove`는 인덱스 내림차순으로 지운다.** pre-entry 인덱스를 유지하기 위해서다.
 - **`spliceInto`는 리스트를 한 번에 재구성한다.** targets `[0, 2]`가 `[a b c]`에서 `[Z a b Z c]`가 되도록 — 첫 삽입이 둘째를 밀지 않는다.
+
+### 적합성 코퍼스
+
+`conformance/` — 케이스 39개, 5개 textproto 파일
+
+```
+conformance/
+  cases/targets.textproto    다중 타겟이 집합이라는 규칙
+  cases/missing.textproto    NO SLOT / EMPTY SLOT / PRESENCE 구분
+  cases/range.textproto      Range 정규화 (스키마 예제 + presence 회귀)
+  cases/relocate.textproto   move/copy와 퇴화 사례
+  cases/scope.textproto      컨테이너 스코프와 단언
+  run.go                     Applier를 받아 코퍼스 전체를 돌린다
+```
+
+**케이스가 Go 코드가 아니라 데이터인 이유**는 `patchwire`다. 메시지 인스턴스에 적용하는 것과 바이트에 적용하는 것은 필연적으로 별개 엔진이므로, 둘이 같은 문서를 다르게 읽지 않게 하는 장치가 필요하다. 구 설계의 세 백엔드가 정확히 그렇게 갈라졌다.
+
+```go
+// patchwire가 나중에 그대로 쓴다
+conformance.Run(t, func(in *sample.Value, p *patchpb.Patch) (*sample.Value, error) {
+    return patchproto.Apply(in, p)
+})
+```
+
+`runCase`가 **모든 케이스마다** 입력 무손상을 확인한다 — 원자성은 특정 케이스의 주제가 아니라 전역 불변식이다.
+
+코퍼스 자체도 검사한다. `TestCorpusIsWellFormed`는 오타 난 에러 이름과 결과를 말하지 않는 케이스를 잡고, `TestCorpusCoversTheOperations`는 여섯 연산 중 하나라도 케이스가 없으면 실패한다 — 스키마에 연산을 추가하고 코퍼스를 방치할 수 없게 한다.

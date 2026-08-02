@@ -1,0 +1,105 @@
+# move and copy, including the degenerate cases the previous implementation
+# silently got wrong: moving a field onto itself deleted it, and moving from an
+# an absent source cleared the destination.
+
+cases {
+  name: "move_clears_the_source"
+  doc: "The value lands on the target and the source is cleared once, after every write."
+  input { s_1: "val" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "s_2" } } } }
+      move { from { same_container {} key { field { name: "s_1" } } } }
+    } }
+  }
+  output { s_2: "val" }
+}
+
+cases {
+  name: "copy_leaves_the_source"
+  doc: "copy is move without the clear."
+  input { s_1: "val" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "s_2" } } } }
+      copy { from { same_container {} key { field { name: "s_1" } } } }
+    } }
+  }
+  output { s_1: "val" s_2: "val" }
+}
+
+cases {
+  name: "move_onto_itself_is_a_noop"
+  doc: "RFC 6902 4.4. The previous implementation deleted the field."
+  input { s_1: "val" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "s_1" } } } }
+      move { from { same_container {} key { field { name: "s_1" } } } }
+    } }
+  }
+  output { s_1: "val" }
+}
+
+cases {
+  name: "move_from_an_absent_source_fails"
+  doc: "Not a silent clear of the destination, which is what the previous implementation did."
+  input { s_3: "keep" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "s_3" } } } }
+      move { from { same_container {} key { field { name: "s_1" } } } }
+    } }
+  }
+  error: "source does not resolve"
+}
+
+cases {
+  name: "move_to_two_targets"
+  doc: "The source is read before any write and cleared after all of them, so order cannot matter."
+  input { s_1: "A" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets {
+        selectors { key { field { name: "s_2" } } }
+        selectors { key { field { name: "s_3" } } }
+      }
+      move { from { same_container {} key { field { name: "s_1" } } } }
+    } }
+  }
+  output { s_2: "A" s_3: "A" }
+}
+
+cases {
+  name: "copy_across_containers"
+  doc: "A Location may name a container other than the one holding the targets."
+  input { s_1: "val" m_1 {} }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_1" } } }
+      targets { selectors { key { field { name: "s_2" } } } }
+      copy { from { path {} key { field { name: "s_1" } } } }
+    } }
+  }
+  output { s_1: "val" m_1 { s_2: "val" } }
+}
+
+cases {
+  name: "relocation_requires_the_same_kind"
+  doc: "There is no conversion; a string does not become an int32."
+  input { s_1: "val" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "i32_1" } } } }
+      copy { from { same_container {} key { field { name: "s_1" } } } }
+    } }
+  }
+  error: "type mismatch"
+}

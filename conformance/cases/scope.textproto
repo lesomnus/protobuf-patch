@@ -1,0 +1,139 @@
+# Container scope and assertions.
+#
+# Container scope is an explicit oneof arm, not the absence of targets. Under
+# the previous design an empty target list meant "the whole container", so a
+# producer that computed nothing was handed the most destructive operation
+# available; the three backends then disagreed on what counted as empty.
+
+cases {
+  name: "container_remove_empties_a_message"
+  doc: "Every declared field is cleared."
+  input { s_1: "x" i32_1: 7 }
+  patch {
+    message_type: "sample.Value"
+    delta { entries { container {} remove {} } }
+  }
+  output {}
+}
+
+cases {
+  name: "container_assign_replaces_a_message"
+  doc: "Clear, then apply. Fields the value does not mention end up unset."
+  input { s_1: "x" i32_1: 7 }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      container {}
+      assign { value { m { fields { key { name: "s_2" } value { s: "only" } } } } }
+    } }
+  }
+  output { s_2: "only" }
+}
+
+cases {
+  name: "container_assign_replaces_a_list"
+  doc: "A repeated field has no presence, so an empty one can still be addressed and filled."
+  input {}
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      container {}
+      assign { value { l { values { s: "x" } values { s: "y" } } } }
+    } }
+  }
+  output { r_s_1: "x" r_s_1: "y" }
+}
+
+cases {
+  name: "container_insert_appends_to_a_list"
+  doc: "insert at container scope adds without replacing what is there."
+  input { r_s_1: "a" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      container {}
+      insert { value { l { values { s: "b" } } } }
+    } }
+  }
+  output { r_s_1: "a" r_s_1: "b" }
+}
+
+cases {
+  name: "container_assign_fails_before_clearing"
+  doc: "A value naming an undeclared field must leave the target intact, not empty it and then drop the field."
+  input { s_1: "keep" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      container {}
+      assign { value { m { fields { key { name: "no_such_field" } value { s: "v" } } } } }
+    } }
+  }
+  error: "target does not exist"
+}
+
+cases {
+  name: "test_absence_of_a_map_key"
+  doc: "exists=false has to be satisfiable for a map key, which is what the empty-slot rule is for."
+  input { m_s_s { key: "k" value: "v" } }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_s_s" } } }
+      targets { selectors { key { map_key { s: "gone" } } } }
+      test { exists: false }
+    } }
+  }
+  output { m_s_s { key: "k" value: "v" } }
+}
+
+cases {
+  name: "test_absence_of_an_undeclared_field"
+  doc: "A test reads a missing target instead of being governed by it."
+  input { s_1: "x" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "no_such_field" } } } }
+      test { exists: false }
+    } }
+  }
+  output { s_1: "x" }
+}
+
+cases {
+  name: "test_cannot_pass_vacuously"
+  doc: "An empty range names zero locations, so the assertion says nothing and must not be reported as holding."
+  input { r_s_1: "a" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets { selectors { range { begin: 1 end: 1 } } }
+      test { exists: true }
+    } }
+  }
+  error: "test asserts nothing"
+}
+
+cases {
+  name: "a_failed_test_undoes_earlier_entries"
+  doc: "The document applies entirely or not at all; a guard that fires must leave nothing behind."
+  input { s_1: "orig" }
+  patch {
+    message_type: "sample.Value"
+    delta {
+      entries {
+        targets { selectors { key { field { name: "s_1" } } } }
+        assign { value { s: "changed" } }
+      }
+      entries {
+        targets { selectors { key { field { name: "i64_1" } } } }
+        test { value { i64: 42 } }
+      }
+    }
+  }
+  error: "test failed"
+}

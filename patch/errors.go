@@ -271,3 +271,17 @@ func (e *Error) wrap(err error) *Error {
 	e.err = err
 	return e
 }
+
+// CodeByName returns the Code whose String is name.
+//
+// The corpus in conformance/ names expected failures by string so that the
+// cases stay data rather than Go code, and any implementation of the format
+// can run them.
+func CodeByName(name string) (Code, bool) {
+	for c, s := range codeNames {
+		if s == name {
+			return c, true
+		}
+	}
+	return CodeOK, false
+}

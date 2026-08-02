@@ -1,0 +1,138 @@
+# Missing targets: the distinction between an address that names no position
+# and a position that is merely empty.
+#
+# This is where the previous design's schema contradicted itself, so it is
+# where two implementations are most likely to disagree.
+
+cases {
+  name: "undeclared_field_fails"
+  doc: "A field the message does not declare names no slot, so it fails by default."
+  input { s_1: "x" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "no_such_field" } } } }
+      remove {}
+    } }
+  }
+  error: "target does not exist"
+}
+
+cases {
+  name: "undeclared_field_skipped_when_asked"
+  doc: "Tolerance is available, but only as a recorded decision on the wire."
+  input { s_1: "x" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "no_such_field" } } } }
+      on_missing: ON_MISSING_SKIP
+      remove {}
+    } }
+  }
+  output { s_1: "x" }
+}
+
+cases {
+  name: "assign_creates_a_map_entry"
+  doc: "An absent map key is an EMPTY SLOT, not a missing target: assign fills it."
+  input {}
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_s_s" } } }
+      targets { selectors { key { map_key { s: "k" } } } }
+      assign { value { s: "v" } }
+    } }
+  }
+  output { m_s_s { key: "k" value: "v" } }
+}
+
+cases {
+  name: "insert_creates_a_map_entry"
+  doc: "insert requires the slot to be empty, which an absent key is."
+  input {}
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_s_s" } } }
+      targets { selectors { key { map_key { s: "k" } } } }
+      insert { value { s: "v" } }
+    } }
+  }
+  output { m_s_s { key: "k" value: "v" } }
+}
+
+cases {
+  name: "insert_refuses_an_occupied_map_key"
+  doc: "An occupied position is what separates insert from assign."
+  input { m_s_s { key: "k" value: "held" } }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_s_s" } } }
+      targets { selectors { key { map_key { s: "k" } } } }
+      insert { value { s: "v" } }
+    } }
+  }
+  error: "target already has a value"
+}
+
+cases {
+  name: "remove_needs_an_existing_map_entry"
+  doc: "remove has nothing to delete in an empty slot, so it is a missing target."
+  input {}
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "m_s_s" } } }
+      targets { selectors { key { map_key { s: "k" } } } }
+      remove {}
+    } }
+  }
+  error: "target does not exist"
+}
+
+cases {
+  name: "remove_clears_a_declared_but_unset_field"
+  doc: "A declared field always exists as a position; being unset is presence, not absence."
+  input {}
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "s_1" } } } }
+      remove {}
+    } }
+  }
+  output {}
+}
+
+cases {
+  name: "index_past_the_end_fails"
+  doc: "A list has no slot beyond its length; growing it is what append is for."
+  input { r_s_1: "a" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      path { segments { field { name: "r_s_1" } } }
+      targets { selectors { key { index: 5 } } }
+      assign { value { s: "z" } }
+    } }
+  }
+  error: "target does not exist"
+}
+
+cases {
+  name: "field_conflict_is_never_skipped"
+  doc: "Disagreeing identifiers mean the Patch was written against another schema; on_missing must not reach it."
+  input { s_1: "x" }
+  patch {
+    message_type: "sample.Value"
+    delta { entries {
+      targets { selectors { key { field { name: "s_1" number: 209 } } } }
+      on_missing: ON_MISSING_SKIP
+      remove {}
+    } }
+  }
+  error: "field identifiers disagree"
+}
