@@ -10,7 +10,7 @@
 | P1 빌더 | ✅ | `patch/build.go`, `buildkey.go`, `buildvalue.go` |
 | P2 구조 검증 | ✅ | `patch/validate.go` |
 | P3 값 모델 | ✅ | `patch/value.go` |
-| P4 주소 해석 | ⬜ | `patch/`, `patchproto/` |
+| P4 주소 해석 | 🟨 | `patch/resolve.go` (descriptor 부분 완료) |
 | P5 적용 | ⬜ | `patchproto/`, `conformance/` |
 | P6 RFC 6902 변환 | ⬜ | `jsonpatch/` |
 
@@ -178,3 +178,41 @@ func MapKeyFor(k *patchpb.MapKey, fd protoreflect.FieldDescriptor, at At) (proto
 arm이 선언된 키 타입과 정확히 일치해야 한다 — 숫자 키가 문자열 맵에 문자열화되지 않는다(구 구현은 `fmt.Sprintf("%d", ...)`로 강제 변환했다). arm이 맞아도 **값이 범위를 벗어나면 오류**다: `map<int32,V>`에 `i: 2^31`은 절단도 아니고 `on_missing`이 건너뛸 수 있는 vacancy도 아니다.
 
 `m_i32_s` `m_i64_s` `m_u32_s` `m_u64_s` `m_si64_s` `m_ux32_s` `m_b_s`를 sample에 추가했다 — 구 저장소가 커버리지 공백으로 인정했던(`root-replace-plan.md:84`) 정수·bool 키 맵이다.
+
+---
+
+## P4 — 주소 해석 🟨
+
+`patch/resolve.go` — descriptor만으로 되는 부분. 인스턴스가 필요한 경로 탐색·셀렉터 확장·중복 검출은 P5에서 `patchproto/`에 들어간다.
+
+```go
+func ResolveField(md protoreflect.MessageDescriptor, f *patchpb.Field, at At) (protoreflect.FieldDescriptor, bool, error)
+func NormalizeIndex(i int64, length int) (int, bool)
+func NormalizeRange(r *patchpb.Range, length int) (int, int)
+```
+
+### vacancy가 세 번째 반환값인 이유
+
+`ResolveField`와 `NormalizeIndex`가 `(값, vacant bool, err)` 형태다. **vacancy를 `error`에 접으면 `test.exists = false`를 구현할 수 없다** — 부재를 읽어야 하는데 부재가 곧 실패가 되어버리기 때문이다. 스키마 초안이 정확히 이 함정에 빠졌고(redesign §5), 그래서 타입으로 분리했다.
+
+호출부에서 세 위치가 각각 다르게 처리한다:
+
+| 위치 | vacancy 처리 |
+|---|---|
+| `Entry.targets` + `test` | **읽는다** — `exists`가 보고하는 것이 이것 |
+| `Entry.targets` + 나머지 | `on_missing` 적용 (기본: 실패) |
+| `Path`, `Location` | 무조건 오류 |
+
+### 충돌은 vacancy가 아니다
+
+`Field`의 식별자들이 서로 다른 필드를 가리키면 `CodeFieldConflict`이고, **`on_missing`으로 건너뛸 수 없다.** 그건 "없다"가 아니라 "이 Patch는 다른 스키마를 대상으로 쓰였다"는 뜻이고, 이 형식이 가진 유일한 무결성 검사이기 때문이다.
+
+`TestResolveFieldConflict`가 다섯 가지 불일치를 확인하며, 그중 어느 것도 vacant로 보고되지 않음을 명시적으로 검사한다.
+
+해석 순서는 **번호 → 이름 → json_name**이다. 필드 번호가 protobuf의 안정된 정체성이고 이름은 와이어 파손 없이 바뀔 수 있기 때문이다. 나머지 설정된 식별자는 전부 해석 결과와 대조된다.
+
+### Range는 스키마 주석이 곧 테스트다
+
+`TestNormalizeRangeMatchesTheSchema`가 `path.proto`의 워크드 예제 6개를 그대로 돌린다. 명세가 예제이므로 예제가 테스트다.
+
+`HasBegin()`/`HasEnd()`로 분기한다 — 구 구현은 `end <= 0`으로 분기해 **명시적 `[0,0)`이 리스트 전체를 선택했다.** `TestNormalizeRangeReadsPresence`가 `[0,0)` / `[0,_)` / `[_,0)` 셋을 구별함을 고정한다. 그리고 `TestNormalizeRangeNeverWraps`가 구 스키마 주석이 주장하던 `[-2,2)` = "마지막 둘 + 처음 둘"의 wrap-around가 없음을 확인한다.
