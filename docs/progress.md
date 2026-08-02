@@ -8,7 +8,7 @@
 |---|---|---|
 | P0 에러 분류 | ✅ | `patch/errors.go` |
 | P1 빌더 | ✅ | `patch/build.go`, `buildkey.go`, `buildvalue.go` |
-| P2 구조 검증 | ⬜ | `patch/` |
+| P2 구조 검증 | ✅ | `patch/validate.go` |
 | P3 값 모델 | ⬜ | `patch/`, `patchproto/` |
 | P4 주소 해석 | ⬜ | `patch/`, `patchproto/` |
 | P5 적용 | ⬜ | `patchproto/`, `conformance/` |
@@ -90,3 +90,52 @@ p, err := patch.New("example.v1.User",
 **`Span` 계열이 presence를 표현한다.** `SpanAll()` / `SpanFrom(0)` / `SpanTo(0)`이 서로 다른 세 개의 와이어 상태다. 구 구현이 `end <= 0`으로 분기해 명시적 `[0,0)`을 "전체"로 읽던 버그가 재발할 수 없다 — 애초에 값 0과 미설정을 다른 생성자로 나눴다.
 
 `TestSpanPresence`가 이 셋의 `HasBegin()`/`HasEnd()` 조합을 고정한다.
+
+---
+
+## P2 — 구조 검증 ✅
+
+`patch/validate.go` — `func Validate(p *patchpb.Patch) error`
+
+대상 메시지 없이 판정 가능한 규칙 전부. 첫 위반을 반환한다.
+
+### unknown field 순회가 이 단계의 전부다
+
+protobuf는 **미지의 oneof arm을 "미설정"으로 보고한다.** 따라서 `WhichKind()`만으로는 *"프로듀서가 안 넣었다"*와 *"내가 모르는 arm이다"*를 구별할 수 없고, **unknown field 집합이 유일한 구별 수단이다.**
+
+`Validate`가 다른 무엇보다 먼저 `findUnknown`을 돌리는 이유가 이것이다 — 이게 통과하기 전에는 문서에 대해 관측한 어떤 것도 보이는 대로의 의미라고 믿을 수 없다.
+
+가장 위험한 사례를 테스트로 고정했다:
+
+```go
+// Value는 14-15를 미래 arm으로 예약해두었다.
+// v2가 그중 하나를 쓴 Value를 v1이 읽으면 WhichKind()는 not_set을 반환한다.
+v := &patchpb.Value{}
+setUnknown(v, 14)
+// → CodeUnknownField. "값이 없다"로도, 하물며 "clear"로도 읽히지 않는다.
+```
+
+스키마가 미설정 `Value.kind`를 오류로 규정한 것이 바로 이 경로를 막기 위해서였고, 검증이 그것을 집행한다. `TestValidateRefusesUnknownFields`가 Patch 최상위 / 중첩 Entry / 빈 payload 메시지(`Remove{}`) / 3단 중첩 Delta 깊은 곳 / repeated 원소 / **와이어 왕복 후** 여섯 위치를 모두 확인한다.
+
+### 검증 항목
+
+| 대상 | 확인 |
+|---|---|
+| 문서 | unknown field, `message_type`, `min_reader_revision <= Revision`, `delta` 존재·비어있지 않음 |
+| 엔트리 | `scope` 설정, `kind` 설정, `targets.selectors` 비어있지 않음, `on_missing` 인식 가능, 컨테이너로의 `move`/`copy` 금지 |
+| `test` | `want` 설정, `on_missing` 미설정 |
+| 셀렉터 | arm 설정, `append`는 `insert`/`move`/`copy`에서만 |
+| 키 | arm 설정, `Field`에 식별자 존재(빈 이름·번호 0 거부), `MapKey` arm 설정 |
+| 값 | `kind` 설정, `MessageValue`/`ListValue`/`MapValue` 재귀, `FieldValue`/`MapEntry`의 키·값 필수 |
+| 위치 | `origin` 설정, `key` 설정 |
+| 중첩 | `Nest.delta` 재귀 |
+
+에러의 `At`이 문서 내 경로를 정확히 짚는다:
+
+```
+delta.entries[0].nest.delta.entries[0].nest.delta.entries[0].assign.value
+```
+
+### 테스트 구성
+
+`TestValidateEntry`의 케이스는 **전부 `patchpb`로 직접 조립한다.** 빌더로는 만들 수 없는 상태들이기 때문이다(P1 표 참조) — 그리고 그게 바로 검증이 필요한 모집단이다. 반대로 `TestValidateAcceptsWhatTheBuilderProduces`는 빌더 산출물이 오탐되지 않음을 확인한다.
