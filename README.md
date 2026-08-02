@@ -123,6 +123,7 @@ reason.
 
 | Document | What it is |
 | -------- | ---------- |
+| [examples.md](docs/examples.md) | Patches written out in ProtoJSON, with their real inputs, outputs, and errors |
 | [progress.md](docs/progress.md) | What is built, and the decisions taken while building it |
 | [implementation-plan.md](docs/implementation-plan.md) | The plan it was built to, in dependency order |
 | [patch-schema-redesign.md](docs/patch-schema-redesign.md) | What the current schema decided, and why |
