@@ -597,3 +597,70 @@ func ExampleTargetScope_InOrCreate() {
 	// kept: please keep me
 	// literal kept: ""
 }
+
+// ExampleReadOnly refuses a document before applying it, when some of the
+// target's fields are owned by the server rather than by the client.
+func ExampleReadOnly() {
+	md := (&sample.Value{}).ProtoReflect().Descriptor()
+
+	// s_1 stands in for an id, m_1.s_1 for a nested server-owned stamp.
+	ro := patch.MustNewReadOnly(md, "s_1", "m_1.s_1")
+
+	for _, tc := range []struct {
+		what string
+		op   patch.Op
+	}{
+		{"write an ordinary field", patch.Target(patch.Name("s_2")).Assign(patch.Str("v"))},
+		{"write the id", patch.Target(patch.Name("s_1")).Assign(patch.Str("v"))},
+		{"assert about the id", patch.Target(patch.Name("s_1")).Test(patch.Str("v"))},
+		{"move the id away", patch.Target(patch.Name("s_2")).Move(patch.Here(patch.Name("s_1")))},
+		{"replace the message holding the stamp", patch.Target(patch.Name("m_1")).Assign(patch.Msg())},
+	} {
+		err := ro.Check(patch.MustNew(messageType, tc.op))
+		if err == nil {
+			fmt.Printf("%-38s ok\n", tc.what)
+			continue
+		}
+		fmt.Printf("%-38s %v\n", tc.what, err)
+	}
+
+	// Output:
+	// write an ordinary field                ok
+	// write the id                           delta.entries[0].targets.selectors[0]: field is read-only: s_1 is read-only
+	// assert about the id                    ok
+	// move the id away                       delta.entries[0].move.from: field is read-only: s_1 is read-only
+	// replace the message holding the stamp  delta.entries[0].targets.selectors[0]: field is read-only: m_1.s_1 is read-only, and this replaces m_1, which holds it
+}
+
+// ExampleWrites reports what a document may change, which is the primitive
+// ReadOnly is built on. Use it directly to log a diff summary, to route an
+// approval, or to build a policy ReadOnly does not express.
+func ExampleWrites() {
+	md := (&sample.Value{}).ProtoReflect().Descriptor()
+
+	p := patch.MustNew(messageType,
+		patch.Target(patch.Name("s_1")).Test(patch.Str("etag")),
+		patch.Target(patch.Name("s_2")).Assign(patch.Str("v")),
+		patch.Target(patch.Name("s_3")).Move(patch.Here(patch.Name("s_2"))),
+		patch.Target(patch.Name("r_s_1")).InOrCreate(patch.Name("m_1")).Remove(),
+	)
+
+	ws, err := patch.Writes(md, p)
+	if err != nil {
+		panic(err)
+	}
+	for _, w := range ws {
+		kind := "writes  "
+		if w.Materializes {
+			kind = "creates "
+		}
+		fmt.Printf("%s%-12s %s\n", kind, w.Path, w.At)
+	}
+
+	// Output:
+	// writes  s_2          delta.entries[1].targets.selectors[0]
+	// writes  s_2          delta.entries[2].move.from
+	// writes  s_3          delta.entries[2].targets.selectors[0]
+	// creates m_1          delta.entries[3].on_absent_path
+	// writes  m_1.r_s_1    delta.entries[3].targets.selectors[0]
+}

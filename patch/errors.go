@@ -155,6 +155,17 @@ const (
 	// CodeTestVacuous is a test entry whose selectors resolve to zero
 	// locations. Such a test asserts nothing, so it cannot be allowed to pass.
 	CodeTestVacuous
+
+	// --- Caller policy. Not part of the format. ---
+
+	// CodeReadOnly is a write to a field the CALLER has declared unwritable —
+	// see ReadOnly. No rule of the schema is violated: the document is
+	// well-formed and would apply, and it is the application that refuses it.
+	//
+	// It is a Code rather than a separate error type so that a handler which
+	// already switches on CodeOf does not need a second branch to report the
+	// one rejection its users are most likely to hit.
+	CodeReadOnly
 )
 
 var codeNames = map[Code]string{
@@ -186,6 +197,7 @@ var codeNames = map[Code]string{
 	CodeSourceUnresolved:     "source does not resolve",
 	CodeTestFailed:           "test failed",
 	CodeTestVacuous:          "test asserts nothing",
+	CodeReadOnly:             "field is read-only",
 }
 
 func (c Code) String() string {

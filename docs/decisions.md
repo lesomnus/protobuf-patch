@@ -519,6 +519,44 @@ have one implementation and the types are exported.
 Conformance cases are textproto, not Go, so a second implementation can run them
 without importing the first one's tests.
 
+### The write analysis over-approximates, and refuses what it cannot read
+
+`patch.Writes` reports the fields a document may modify, so that a caller can
+refuse one before applying it — `patch.ReadOnly` is the policy built on it. See
+[readonly.md](readonly.md).
+
+It is descriptor-only, which is the same split as the rest of `patch`, and it
+means the answer is necessarily wider than the truth: `oneof_member` resolves to
+whichever member is *set*, and `range`, `append`, and `every_entry` may match
+nothing at all. Widening is the only safe direction for something used to
+refuse, so all of those are reported.
+
+The property that matters is that it never *narrows*. Two things hold that up.
+It runs `Validate` first, so a document from a newer revision is refused rather
+than analyzed as though the part understood were the whole — the same argument
+that makes the unknown-field scan the first thing an applier does. And every
+switch over an arm errors on its default, so a new arm added without teaching
+the analysis about it cannot compile down to a silent "modifies nothing".
+
+Two writes are easy to miss and both are reported. `move` clears its source, so
+the source is a write. And a `nest` **materializes** its target: descending into
+an unset singular message field populates it, so the target changes even when
+the delta inside only asserts. That was found by probing the reference engine,
+not by reading it.
+
+Materialization is a distinct kind of write rather than an ordinary one.
+Creating a container cannot drop what is under it — nothing was there — so it
+affects the path itself and the containers holding it, and nothing beneath. Had
+it been folded in with the rest, a policy on any nested field would have refused
+every `nest` and every `InOrCreate` passing through an ancestor of it, which is
+most of them.
+
+`CodeReadOnly` sits in the error taxonomy even though no rule of the schema is
+violated. That breaks the taxonomy's invariant — every other `Code` maps to a
+line of the FAILURE CONTRACT — and is marked as such where it is declared. The
+trade was that a handler already switching on `CodeOf` should not need a second
+error type for the rejection its users hit most.
+
 Every case also asserts the input is unchanged, so atomicity is a global
 invariant of the suite rather than one case's subject.
 

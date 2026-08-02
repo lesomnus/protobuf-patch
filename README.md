@@ -63,6 +63,23 @@ creates only what is missing.
 **Bounds what it will read.** Both places a document recurses are bounded, so a
 few kilobytes cannot cost gigabytes.
 
+**Says what it would change, before it changes it.** `patch.Writes` reports
+every field a document may modify, from its descriptor alone. `patch.ReadOnly`
+turns that into a check for the fields a client is not allowed to touch.
+
+```go
+ro := patch.MustNewReadOnly(md, "id", "created_at", "status.observed_at")
+
+if err := ro.Check(p); err != nil {
+    return err        // patch.CodeReadOnly, positioned at the entry to blame
+}
+updated, err := patchproto.Apply(user, p)
+```
+
+The analysis widens rather than guesses — a `oneof` selector counts as every
+member, a `move` counts as a write to its source — so it can be used to refuse.
+See [readonly.md](docs/readonly.md).
+
 ## Targets
 
 | Package | Target | |
@@ -92,6 +109,7 @@ tested, so a new one cannot appear silently. See [engines.md](docs/engines.md).
 | [format.md](docs/format.md) | The format: addressing, values, operations, failure, evolution |
 | [examples.md](docs/examples.md) | Patches in ProtoJSON, with their real inputs, outputs, and errors |
 | [engines.md](docs/engines.md) | The three engines, what each can enforce, and where they differ |
+| [readonly.md](docs/readonly.md) | Checking what a patch would change, before applying it |
 | [decisions.md](docs/decisions.md) | Why the format is shaped this way |
 | [history/](docs/history/) | The review and planning documents this came out of (Korean) |
 
