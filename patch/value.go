@@ -426,7 +426,15 @@ func ValueOf(pv protoreflect.Value, fd protoreflect.FieldDescriptor, site Site, 
 		v := pv.String()
 		b.S = &v
 	case protoreflect.BytesKind:
-		b.X = pv.Bytes()
+		// protobuf has no null bytes, so a nil slice is an empty one and the
+		// arm must be set either way; the builder only sets `x` for a non-nil
+		// slice, which would otherwise leave a Value that says nothing at all.
+		// Bytes normalizes the same way.
+		x := pv.Bytes()
+		if x == nil {
+			x = []byte{}
+		}
+		b.X = x
 	case protoreflect.EnumKind:
 		v := int32(pv.Enum())
 		b.E = &v

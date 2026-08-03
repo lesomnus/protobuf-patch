@@ -101,6 +101,10 @@ message Value {
   map<string, string> m_s_s = 10909;
   map<string, Value> m_s_m = 10911;
 
+  // A bytes-valued map, so that "a nil slice is an empty one" can be checked
+  // at a map value and not only at a field or a list element.
+  map<string, bytes> m_s_bs = 10912;
+
   // Every legal protobuf map key type, so that MapKey's arm table and its
   // range checks can be exercised against a real descriptor.
   map<int32, string> m_i32_s = 10903;
