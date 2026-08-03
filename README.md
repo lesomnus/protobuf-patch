@@ -110,6 +110,7 @@ tested, so a new one cannot appear silently. See [engines.md](docs/engines.md).
 | [examples.md](docs/examples.md) | Patches in ProtoJSON, with their real inputs, outputs, and errors |
 | [engines.md](docs/engines.md) | The three engines, what each can enforce, and where they differ |
 | [readonly.md](docs/readonly.md) | Checking what a patch would change, before applying it |
+| [normalize.md](docs/normalize.md) | Reordering a patch for a backend that applies the whole delta at once |
 | [decisions.md](docs/decisions.md) | Why the format is shaped this way |
 | [history/](docs/history/) | The review and planning documents this came out of (Korean) |
 
